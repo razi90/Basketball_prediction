@@ -278,7 +278,7 @@ def dashboard(port):
 def main():
     """Entry point for the CLI"""
     # Initialize database connection if enabled
-    from utils.db_utils import initialize_database, close_database, db_config
+    from src.utils.db_utils import initialize_database, close_database, db_config
     import atexit
     import os
 
