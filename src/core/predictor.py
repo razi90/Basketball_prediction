@@ -196,9 +196,9 @@ class GameDataPreprocessor:
             DataFrame with columns: home_team, away_team, game_date
 
         Raises:
-            RuntimeError: If database is not enabled
             FileNotFoundError: If no games data exists
             DataValidationError: If required columns are missing
+            ConfigurationError: If database is not configured
 
         Example:
             >>> games_df = preprocessor.load_upcoming_games("2025-11-16")
@@ -206,13 +206,7 @@ class GameDataPreprocessor:
             Index(['home_team', 'away_team', 'game_date'])
         """
         with ErrorContext("Loading game schedule", logger=logger):
-            from src.utils.db_utils import db_config, DatabaseOperations
-
-            if not db_config.enabled:
-                raise RuntimeError(
-                    "Database is not enabled. Set USE_DATABASE=true environment variable. "
-                    "CSV processing has been removed."
-                )
+            from src.utils.db_utils import DatabaseOperations
 
             logger.info(f"Loading upcoming games from database for {date_str}")
             db_ops = DatabaseOperations()
@@ -240,8 +234,8 @@ class GameDataPreprocessor:
             DataFrame with team game statistics and features
 
         Raises:
-            RuntimeError: If database is not enabled
             FileNotFoundError: If no stats data exists
+            ConfigurationError: If database is not configured
 
         Example:
             >>> stats_df = preprocessor.load_historical_stats("2025-11-16")
@@ -249,13 +243,7 @@ class GameDataPreprocessor:
             5000
         """
         with ErrorContext("Loading game statistics", logger=logger):
-            from src.utils.db_utils import db_config, DatabaseOperations
-
-            if not db_config.enabled:
-                raise RuntimeError(
-                    "Database is not enabled. Set USE_DATABASE=true environment variable. "
-                    "CSV processing has been removed."
-                )
+            from src.utils.db_utils import DatabaseOperations
 
             logger.info(f"Loading historical game statistics from database")
             db_ops = DatabaseOperations()

@@ -1253,20 +1253,14 @@ class BetRecommendationDisplay:
             DataFrame with bet recommendations
 
         Raises:
-            RuntimeError: If database is not enabled
+            ConfigurationError: If database is not configured
 
         Example:
             >>> display = BetRecommendationDisplay()
             >>> bets = display.load_recommendations(min_stake=1.0)
         """
         with ErrorContext("Loading bet recommendations from database", logger=logger):
-            from src.utils.db_utils import db_config, DatabaseOperations
-
-            if not db_config.enabled:
-                raise RuntimeError(
-                    "Database is not enabled. Set USE_DATABASE=true environment variable. "
-                    "CSV processing has been removed."
-                )
+            from src.utils.db_utils import DatabaseOperations
 
             # Load enriched predictions from database
             db_ops = DatabaseOperations()

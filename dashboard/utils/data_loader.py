@@ -17,7 +17,7 @@ import pandas as pd
 ROOT_DIR = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from src.utils.db_utils import DatabaseOperations, db_config
+from src.utils.db_utils import DatabaseOperations
 
 
 def load_latest_predictions(limit: int = 100) -> Optional[pd.DataFrame]:
@@ -30,9 +30,6 @@ def load_latest_predictions(limit: int = 100) -> Optional[pd.DataFrame]:
     Returns:
         DataFrame with predictions or None if not found
     """
-    if not db_config.enabled:
-        return None
-
     try:
         db_ops = DatabaseOperations()
         df = db_ops.get_latest_predictions(limit=limit)
@@ -52,9 +49,6 @@ def load_enriched_predictions(limit: int = 100) -> Optional[pd.DataFrame]:
     Returns:
         DataFrame with enriched predictions or None if not found
     """
-    if not db_config.enabled:
-        return None
-
     try:
         db_ops = DatabaseOperations()
         # Try to get enriched predictions if available
@@ -72,9 +66,6 @@ def load_betting_statistics() -> Optional[pd.DataFrame]:
     Returns:
         DataFrame with betting stats or None if not found
     """
-    if not db_config.enabled:
-        return None
-
     try:
         db_ops = DatabaseOperations()
         # Get betting performance metrics
@@ -97,9 +88,6 @@ def load_historical_games(days_back: int = 30) -> Optional[pd.DataFrame]:
     Returns:
         DataFrame with historical games or None if not found
     """
-    if not db_config.enabled:
-        return None
-
     try:
         db_ops = DatabaseOperations()
         df = db_ops.get_latest_game_statistics(limit=None)
@@ -129,9 +117,6 @@ def load_all_predictions(limit: int = 100) -> Optional[pd.DataFrame]:
     Returns:
         DataFrame with all predictions or None if not found
     """
-    if not db_config.enabled:
-        return None
-
     try:
         db_ops = DatabaseOperations()
         df = db_ops.get_latest_predictions(limit=limit)
@@ -221,13 +206,9 @@ def get_available_data_summary() -> dict:
         Dictionary with data counts and date ranges
     """
     summary = {
-        "database_enabled": db_config.enabled,
         "prediction_count": 0,
         "game_statistics_count": 0,
     }
-
-    if not db_config.enabled:
-        return summary
 
     try:
         db_ops = DatabaseOperations()

@@ -201,16 +201,10 @@ class BettingPerformanceAnalyzer:
             DataFrame with predictions, with normalized odds columns
 
         Raises:
-            RuntimeError: If database is not enabled
             DataValidationError: If data cannot be loaded or is invalid
+            ConfigurationError: If database is not configured
         """
         with ErrorContext("loading predictions from database"):
-            if not db_config.enabled:
-                raise RuntimeError(
-                    "Database is not enabled. Set USE_DATABASE=true environment variable. "
-                    "CSV processing has been removed."
-                )
-
             db_ops = DatabaseOperations()
             predict_df = db_ops.get_latest_predictions(limit=limit or 100)
 
@@ -243,16 +237,10 @@ class BettingPerformanceAnalyzer:
             DataFrame with actual game results for the current season
 
         Raises:
-            RuntimeError: If database is not enabled
             DataValidationError: If data cannot be loaded or is invalid
+            ConfigurationError: If database is not configured
         """
         with ErrorContext("loading actual results from database"):
-            if not db_config.enabled:
-                raise RuntimeError(
-                    "Database is not enabled. Set USE_DATABASE=true environment variable. "
-                    "CSV processing has been removed."
-                )
-
             season = season or self.season
             db_ops = DatabaseOperations()
             games_df = db_ops.get_latest_game_statistics(limit=None)
@@ -517,8 +505,8 @@ class BettingPerformanceAnalyzer:
             DataFrame with updated statistics, or None if processing failed
 
         Raises:
-            RuntimeError: If database is not enabled
             DataValidationError: If any step in the workflow fails
+            ConfigurationError: If database is not configured
         """
         with ErrorContext("processing betting statistics workflow from database"):
             # Step 1: Load predictions from database
@@ -761,12 +749,9 @@ class HomeWinRateCalculator:
             # Step 2: Filter good teams
             good_teams_df = self.filter_good_home_teams(win_rates_df)
 
-            # Step 3: Save to database if enabled
-            if db_config.enabled:
-                self.save_to_database(win_rates_df)
-                logger.info("Home win rates saved to database")
-            else:
-                logger.warning("Database not enabled, home win rates not saved")
+            # Step 3: Save to database
+            self.save_to_database(win_rates_df)
+            logger.info("Home win rates saved to database")
 
             logger.info(
                 f"Home win rate calculation complete. "
