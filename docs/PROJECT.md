@@ -45,11 +45,14 @@ The Basketball Prediction System is a sophisticated, automated platform for pred
 
 ### Key Metrics
 
+- **~7,461** lines of production code in `src/`
+- **262** passing tests across 9 test modules
 - **~24,773** historical games per season
 - **155+** features per game (basic + advanced stats)
 - **9-game** rolling window for averages
+- **300+** engineered features after preprocessing
 - **3 calibration methods** (Raw, Platt, Isotonic)
-- **Half-Kelly** conservative bankroll management
+- **Half-Kelly** conservative bankroll management (50% fraction)
 - **30% max** stake cap per bet
 - **€300** absolute max bet size
 
@@ -121,52 +124,73 @@ The Basketball Prediction System is a sophisticated, automated platform for pred
                │                           │
                ▼                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  DATA COLLECTION LAYER                       │
+│              DATA COLLECTION LAYER (src/core/collector.py)  │
 ├─────────────────────────────────────────────────────────────┤
-│  Script 1: Scrape Previous Games (Selenium + BeautifulSoup)│
-│  Script 2: Get Next Game Schedule                          │
-│  Script 3: Fetch Live Odds (API Integration)               │
+│  HistoricalGameCollector:                                   │
+│    • Selenium + BeautifulSoup web scraping                 │
+│    • Box score extraction & parsing                        │
+│    • CSV & database storage                                │
+│  UpcomingGameCollector:                                     │
+│    • Schedule extraction                                    │
+│    • Next game matchup generation                          │
 └──────────────┬──────────────────────────────────────────────┘
                │
                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  DATA PROCESSING LAYER                       │
+│           DATA PROCESSING LAYER (src/core/predictor.py)     │
 ├─────────────────────────────────────────────────────────────┤
-│  • Team code normalization (PHO→PHX, BKN→BRK, etc.)        │
-│  • Rolling average calculation (9-game windows)            │
-│  • Feature engineering (self-merge for matchups)           │
-│  • MinMax scaling [0, 1]                                   │
-│  • Target variable creation (won.shift(-1))                │
+│  GameDataPreprocessor:                                      │
+│    • Team code normalization (PHO→PHX, BKN→BRK, etc.)      │
+│    • Target variable creation (won.shift(-1))              │
+│    • Rolling average calculation (9-game windows)          │
+│  MatchupBuilder:                                            │
+│    • Feature engineering (self-merge for matchups)         │
+│    • Opponent features (_opp suffix)                       │
+│    • MinMax scaling [0, 1]                                 │
 └──────────────┬──────────────────────────────────────────────┘
                │
                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                 MACHINE LEARNING LAYER                       │
+│          MACHINE LEARNING LAYER (src/core/predictor.py)     │
 ├─────────────────────────────────────────────────────────────┤
-│  • LightGBM training (80/20 split)                         │
-│  • Hyperparameter tuning                                   │
-│  • Win probability prediction                              │
-│  • Probability calibration (Platt + Isotonic)              │
+│  LightGBMPredictor:                                         │
+│    • LightGBM training (80/20 split)                       │
+│    • Hyperparameter optimization                           │
+│    • Win probability prediction (~300 features)            │
+│  ProbabilityCalibrator (src/core/betting.py):              │
+│    • Platt scaling (logistic regression)                   │
+│    • Isotonic regression (non-parametric)                  │
 └──────────────┬──────────────────────────────────────────────┘
                │
                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   BETTING STRATEGY LAYER                     │
+│            BETTING STRATEGY LAYER (src/core/betting.py)     │
 ├─────────────────────────────────────────────────────────────┤
-│  • Value edge calculation (model prob - implied prob)      │
-│  • Kelly Criterion stake sizing                            │
-│  • Bankroll management (half-Kelly + caps)                │
-│  • Filter application (home teams, odds range, prob min)   │
+│  OddsManager:                                               │
+│    • Multi-sportsbook odds fetching (DraftKings, FanDuel) │
+│    • Best odds selection                                   │
+│  KellyCriterionCalculator:                                  │
+│    • Value edge calculation (model prob - implied prob)    │
+│    • Kelly Criterion stake sizing (half-Kelly)             │
+│    • Bankroll management (30% cap, €300 max)              │
+│    • Filter application (home teams, odds range, prob min) │
 └──────────────┬──────────────────────────────────────────────┘
                │
                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   ANALYTICS & OUTPUT LAYER                   │
+│         ANALYTICS & OUTPUT LAYER (src/core/analyzer.py)     │
 ├─────────────────────────────────────────────────────────────┤
-│  • Prediction accuracy tracking                            │
-│  • Bankroll simulation & backtesting                       │
-│  • Performance visualization                               │
-│  • CSV export + optional PostgreSQL/Supabase storage       │
+│  BettingPerformanceAnalyzer:                                │
+│    • Prediction accuracy tracking                          │
+│    • Confidence-based performance metrics                  │
+│  HomeWinRateCalculator:                                     │
+│    • Team-specific win rate calculation                    │
+│  BankrollSimulator:                                         │
+│    • Backtesting & simulation                              │
+│    • Performance visualization                             │
+│  DatabaseOperations (src/utils/db_utils.py):               │
+│    • CSV export + optional PostgreSQL/Supabase storage     │
+│    • Graceful fallback on database errors                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -174,43 +198,82 @@ The Basketball Prediction System is a sophisticated, automated platform for pred
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│                         SCRIPTS (2026/src/)                    │
+│                       CLI LAYER (src/)                         │
 ├────────────────────────────────────────────────────────────────┤
+│  cli.py (Click entry point)                                   │
+│  └─ nba-predict command                                       │
 │                                                                │
-│  1_get_data_previous_game_day_2026.py                         │
-│  ├─ Web Scraping (Selenium)                                   │
-│  ├─ HTML Parsing (BeautifulSoup)                              │
-│  └─ CSV Export                                                │
+│  commands/ (Command implementations)                          │
+│  ├─ collect.py                                                │
+│  │  ├─ collect historical                                     │
+│  │  └─ collect upcoming                                       │
+│  ├─ predict.py                                                │
+│  │  └─ predict                                                │
+│  ├─ analyze.py                                                │
+│  │  ├─ analyze stats                                          │
+│  │  ├─ analyze kelly                                          │
+│  │  ├─ analyze recommend                                      │
+│  │  └─ analyze all                                            │
+│  ├─ pipeline.py                                               │
+│  │  └─ pipeline (full workflow)                               │
+│  └─ dashboard.py                                              │
+│     └─ dashboard (Streamlit UI)                               │
+└────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────┐
+│                    CORE BUSINESS LOGIC (src/core/)             │
+├────────────────────────────────────────────────────────────────┤
+│  collector.py                                                  │
+│  ├─ HistoricalGameCollector                                   │
+│  │  ├─ collect_games_for_date()                               │
+│  │  ├─ scrape_season_for_month()                              │
+│  │  └─ process_saved_boxscores()                              │
+│  └─ UpcomingGameCollector                                     │
+│     └─ collect_upcoming_games()                               │
 │                                                                │
-│  2_get_data_next_game_day_2026.py                             │
-│  ├─ Schedule Extraction                                       │
-│  └─ Next Games CSV                                            │
+│  predictor.py                                                  │
+│  ├─ GameDataPreprocessor                                      │
+│  │  └─ preprocess()                                           │
+│  ├─ MatchupBuilder                                            │
+│  │  └─ build_matchups()                                       │
+│  └─ LightGBMPredictor                                         │
+│     ├─ train()                                                │
+│     └─ predict_games()                                        │
 │                                                                │
-│  3_predict_games_hybrid_2026.py                               │
-│  ├─ Feature Engineering                                       │
-│  ├─ LightGBM Training                                         │
-│  ├─ Odds Fetching (API)                                       │
-│  └─ Prediction CSV                                            │
+│  analyzer.py                                                   │
+│  ├─ BettingPerformanceAnalyzer                                │
+│  │  └─ analyze()                                              │
+│  └─ HomeWinRateCalculator                                     │
+│     └─ calculate()                                            │
 │                                                                │
-│  4_calculate_betting_statistics_2026.py                       │
-│  ├─ Accuracy Calculation                                      │
-│  └─ Stats CSV                                                 │
+│  betting.py                                                    │
+│  ├─ OddsManager                                               │
+│  │  └─ fetch_odds()                                           │
+│  ├─ ProbabilityCalibrator                                     │
+│  │  ├─ calibrate_platt()                                      │
+│  │  └─ calibrate_isotonic()                                   │
+│  ├─ KellyCriterionCalculator                                  │
+│  │  └─ calculate()                                            │
+│  ├─ BankrollSimulator                                         │
+│  │  └─ simulate()                                             │
+│  └─ BetRecommendationDisplay                                  │
+│     └─ display()                                              │
 │                                                                │
-│  5_kelly_betting_parameters_2026.py                           │
-│  ├─ Probability Calibration                                   │
-│  ├─ Kelly Criterion                                           │
-│  ├─ Backtest Simulation                                       │
-│  └─ Enriched CSV + Charts                                     │
-│                                                                │
-│  6_proposed_bets_2026.py                                      │
-│  └─ Display Today's Bets                                      │
-│                                                                │
-│  nba_utils_2026.py                                            │
-│  ├─ Common Utilities                                          │
-│  ├─ Team Normalization                                        │
-│  ├─ Betting Functions                                         │
-│  └─ Data Processing                                           │
-│                                                                │
+│  constants.py                                                  │
+│  ├─ Team codes & aliases                                      │
+│  ├─ Kelly defaults                                            │
+│  ├─ Strategy thresholds                                       │
+│  └─ LightGBM hyperparameters                                  │
+└────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────┐
+│                      UTILITIES (src/utils/)                    │
+├────────────────────────────────────────────────────────────────┤
+│  nba_utils.py       - Team codes, dates, web scraping helpers │
+│  logger.py          - Centralized logging configuration        │
+│  error_handlers.py  - Retry logic, error recovery             │
+│  db_utils.py        - DatabaseOperations class                │
+│  config_loader.py   - Configuration management                │
 └────────────────────────────────────────────────────────────────┘
 
 ┌────────────────────────────────────────────────────────────────┐
@@ -218,10 +281,13 @@ The Basketball Prediction System is a sophisticated, automated platform for pred
 ├────────────────────────────────────────────────────────────────┤
 │  daily_prediction_pipeline.yml                                │
 │  ├─ Install dependencies                                      │
-│  ├─ Run tests (pytest)                                        │
-│  ├─ Execute all 6 scripts                                     │
+│  ├─ Run tests (pytest - 262 tests)                           │
+│  ├─ Execute nba-predict pipeline                              │
 │  ├─ Commit & push results                                     │
 │  └─ Upload artifacts                                          │
+│                                                                │
+│  tests.yml                                                     │
+│  └─ Run test suite on PR/push                                 │
 └────────────────────────────────────────────────────────────────┘
 
 ┌────────────────────────────────────────────────────────────────┐
@@ -230,6 +296,11 @@ The Basketball Prediction System is a sophisticated, automated platform for pred
 │  test_betting_utils.py (67 tests)                             │
 │  test_team_normalization.py (83 tests)                        │
 │  test_data_processing.py (24 tests)                           │
+│  test_error_handlers.py (38 tests)                            │
+│  test_database_integration.py (25 tests)                      │
+│  test_logger.py (25 tests)                                    │
+│  test_cli.py (20+ tests)                                      │
+│  test_migration_scripts.py (25+ tests)                        │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -673,21 +744,25 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Configure environment
+# 4. Install CLI (makes nba-predict command available)
+pip install -e .
+
+# 5. Configure environment
 cp .env.example .env
 # Edit .env and add your ODDS_API_KEY
 
-# 5. Run tests
+# 6. Run tests
 pytest tests/ -v
 
-# 6. Run pipeline manually (optional)
-cd 2026/src
-python 1_get_data_previous_game_day_2026.py
-python 2_get_data_next_game_day_2026.py
-python 3_predict_games_hybrid_2026.py
-python 4_calculate_betting_statistics_2026.py
-python 5_kelly_betting_parameters_2026.py
-python 6_proposed_bets_2026.py
+# 7. Run the complete pipeline
+nba-predict pipeline
+
+# Or run individual commands
+nba-predict collect historical
+nba-predict collect upcoming
+nba-predict predict
+nba-predict analyze all
+nba-predict dashboard
 ```
 
 ### GitHub Actions Setup
@@ -712,50 +787,81 @@ python 6_proposed_bets_2026.py
 
 ```
 Basketball_prediction/
-├── 2025/                           # 2024-25 season (archived)
-│   ├── src/                        # Scripts
-│   └── output/                     # Generated data
+├── src/                            # Modern refactored codebase (~7,461 LOC)
+│   ├── cli.py                      # Click CLI entry point
+│   ├── commands/                   # CLI command implementations
+│   │   ├── collect.py              # Data collection
+│   │   ├── predict.py              # Prediction generation
+│   │   ├── analyze.py              # Analysis & Kelly calculations
+│   │   └── pipeline.py             # Complete workflow
+│   ├── core/                       # Core business logic
+│   │   ├── collector.py            # Data collection classes
+│   │   ├── predictor.py            # ML prediction classes
+│   │   ├── analyzer.py             # Performance analysis
+│   │   ├── betting.py              # Betting strategy classes
+│   │   └── constants.py            # Shared constants
+│   └── utils/                      # Utilities
+│       ├── nba_utils.py            # Team codes, dates, web helpers
+│       ├── logger.py               # Logging configuration
+│       ├── error_handlers.py       # Error handling & retries
+│       ├── db_utils.py             # Database operations
+│       └── config_loader.py        # Configuration management
 │
-├── 2026/                           # 2025-26 season (ACTIVE)
-│   ├── src/                        # Source code
-│   │   ├── 1_get_data_previous_game_day_2026.py
-│   │   ├── 2_get_data_next_game_day_2026.py
-│   │   ├── 3_predict_games_hybrid_2026.py
-│   │   ├── 4_calculate_betting_statistics_2026.py
-│   │   ├── 5_kelly_betting_parameters_2026.py
-│   │   ├── 6_proposed_bets_2026.py
-│   │   └── nba_utils_2026.py       # Shared utilities
-│   └── output/                     # Generated data
-│       ├── Gathering_Data/
-│       │   ├── Next_Game/          # Upcoming schedules
-│       │   ├── Whole_Statistic/    # Historical games
-│       │   └── data/
-│       │       ├── 2026_standings/ # Monthly schedules (HTML)
-│       │       └── 2026_scores/    # Box scores (HTML)
-│       └── LightGBM/               # Predictions & analytics
+├── dashboard/                      # Streamlit web interface
+│   ├── app.py                      # Home page
+│   ├── pages/                      # Multi-page dashboard
+│   │   ├── 1_📊_Today's_Games.py
+│   │   ├── 2_📈_Performance.py
+│   │   ├── 3_🏀_Team_Analytics.py
+│   │   └── 4_💰_Betting_History.py
+│   ├── components/                 # Reusable chart utilities
+│   └── utils/                      # Data loading
 │
-├── .github/
-│   └── workflows/
-│       ├── daily_prediction_pipeline.yml
-│       └── 1_get_data_previous_game_day 2026.yml
+├── database/
+│   ├── schemas/                    # PostgreSQL/Supabase schemas
+│   │   └── 001_initial_schema.sql  # 8 tables, indexes, triggers
+│   └── scripts/                    # Migration scripts
+│       ├── migrate_game_statistics.py
+│       ├── migrate_predictions.py
+│       └── migrate_enriched_predictions.py
 │
-├── tests/                          # Test suite
-│   ├── __init__.py
+├── output/                         # Generated data outputs
+│   ├── Gathering_Data/
+│   │   ├── Whole_Statistic/        # Historical game CSVs
+│   │   ├── Next_Game/              # Upcoming schedules
+│   │   └── data/
+│   │       ├── 2026_standings/     # Monthly schedule HTML
+│   │       └── 2026_scores/        # Box score HTML
+│   └── LightGBM/                   # Predictions & analysis
+│
+├── .github/workflows/              # CI/CD automation
+│   ├── daily_prediction_pipeline.yml  # Daily 06:00 UTC
+│   └── tests.yml                   # Test automation
+│
+├── tests/                          # 262 unit tests, 9 modules
 │   ├── test_betting_utils.py       # 67 tests
 │   ├── test_team_normalization.py  # 83 tests
-│   └── test_data_processing.py     # 24 tests
+│   ├── test_data_processing.py     # 24 tests
+│   ├── test_error_handlers.py      # 38 tests
+│   ├── test_database_integration.py # 25 tests
+│   ├── test_logger.py              # 25 tests
+│   ├── test_cli.py                 # 20+ tests
+│   └── test_migration_scripts.py   # 25+ tests
 │
 ├── docs/                           # Documentation
-│   └── PROJECT.md                  # This file
+│   ├── PROJECT.md                  # This file
+│   ├── ARCHITECTURE.md             # Technical architecture
+│   ├── DATABASE_SETUP.md           # Database configuration
+│   └── ERROR_HANDLING.md           # Error handling guide
 │
 ├── .env.example                    # Environment template
 ├── .gitignore                      # Git ignore rules
-├── requirements.txt                # Python dependencies
+├── requirements.txt                # 23 dependencies
+├── setup.py                        # CLI installation config
 ├── README.md                       # Project overview
-├── SETUP.md                        # Setup instructions
 ├── LICENSE                         # MIT License
-├── PRODUCTION_READY_TESTS.md       # Test documentation
-└── TEST_COVERAGE_ANALYSIS.md       # Coverage analysis
+├── Dockerfile                      # Docker containerization
+└── docker-compose.yml              # Multi-container setup
 ```
 
 ---
@@ -790,10 +896,16 @@ pytest tests/ -v
 pytest tests/test_betting_utils.py -v
 
 # Run with coverage
-pytest tests/ --cov=2026/src --cov-report=html
+pytest tests/ --cov=src --cov-report=html
 
 # Run only critical tests (fast)
 pytest tests/test_betting_utils.py tests/test_team_normalization.py -v
+
+# Run CLI tests
+pytest tests/test_cli.py -v
+
+# Run database tests (requires USE_DATABASE=true)
+pytest tests/test_database_integration.py -v
 ```
 
 ---

@@ -22,56 +22,70 @@ Automates **NBA data scraping, machine learning predictions, and betting analyti
 
 ## Execution Workflow
 
-### 1. Script 1: Get Previous Game Day Data
-**File**: `2026/src/1_get_data_previous_game_day_2026.py`
-- **Purpose**: Scrapes completed NBA games from Basketball-Reference.com
-- **Output**:
-  - CSV: `nba_games_<date>.csv` (game statistics)
-  - Database: Automatic save to PostgreSQL (if enabled)
-- **Features**: Retry logic, error handling, data validation
+The system operates through a modular CLI-based pipeline with the following components:
 
-### 2. Script 2: Get Next Game Day Schedule
-**File**: `2026/src/2_get_data_next_game_day_2026.py`
-- **Purpose**: Scrapes upcoming game schedule
+### 1. Data Collection (`src/core/collector.py`)
+**Commands**: `nba-predict collect historical`, `nba-predict collect upcoming`
+- **Purpose**: Scrapes NBA game data using Selenium + BeautifulSoup
+- **Classes**:
+  - `HistoricalGameCollector`: Scrapes completed games from Basketball-Reference.com
+  - `UpcomingGameCollector`: Fetches upcoming game schedules
 - **Output**:
+  - CSV: `nba_games_<date>.csv` (155+ game statistics columns)
   - CSV: `games_df_<date>.csv` (upcoming matchups)
-  - Database: Game schedule saved to DB (if enabled)
-- **Features**: Month-by-month scraping, automatic season detection
+  - Database: Automatic save to PostgreSQL/Supabase (if enabled)
+- **Features**: Retry logic, error handling, data validation, team normalization
 
-### 3. Script 3: Predict Games (Hybrid Model)
-**File**: `2026/src/3_predict_games_hybrid_2026.py`
+### 2. Prediction Engine (`src/core/predictor.py`)
+**Command**: `nba-predict predict`
 - **Purpose**: Generates win probability predictions using LightGBM
+- **Classes**:
+  - `GameDataPreprocessor`: Preprocesses and adds target variables
+  - `MatchupBuilder`: Creates home vs away feature matchups
+  - `LightGBMPredictor`: Trains model and generates predictions
 - **Output**:
   - CSV: `nba_games_predict_<date>.csv` (predictions + odds)
-  - Database: Predictions with model version tracking (if enabled)
+  - Database: Predictions with model tracking (if enabled)
 - **Features**:
   - Rolling 9-game averages
-  - Live odds integration (The Odds API)
-  - Probability calibration (Platt + Isotonic)
+  - Live odds integration (The Odds API via `OddsManager`)
+  - 300+ engineered features
+  - MinMax scaling [0,1]
 
-### 4. Script 4: Calculate Betting Statistics
-**File**: `2026/src/4_calculate_betting_statistics_2026.py`
-- **Purpose**: Tracks prediction accuracy and betting performance
+### 3. Performance Analysis (`src/core/analyzer.py`)
+**Commands**: `nba-predict analyze stats`, `nba-predict analyze kelly`
+- **Purpose**: Evaluates predictions and calculates betting metrics
+- **Classes**:
+  - `BettingPerformanceAnalyzer`: Tracks prediction accuracy and performance
+  - `HomeWinRateCalculator`: Calculates team-specific win rates
 - **Output**: CSV: `combined_nba_predictions_acc_<date>.csv`
-- **Features**: Accuracy by team, home/away splits, confidence levels
+- **Features**: Accuracy by team, home/away splits, confidence level analysis
 
-### 5. Script 5: Kelly Betting Parameters
-**File**: `2026/src/5_kelly_betting_parameters_2026.py`
+### 4. Betting Strategy (`src/core/betting.py`)
+**Commands**: `nba-predict analyze kelly`, `nba-predict analyze recommend`
 - **Purpose**: Calculates optimal bet sizes using Kelly Criterion
+- **Classes**:
+  - `OddsManager`: Fetches live odds from multiple sportsbooks
+  - `ProbabilityCalibrator`: Platt + Isotonic calibration
+  - `KellyCriterionCalculator`: Optimal stake sizing
+  - `BankrollSimulator`: Backtesting and simulation
+  - `BetRecommendationDisplay`: Formatted bet display
 - **Output**:
   - CSV: `combined_nba_predictions_enriched_<date>.csv`
-  - Database: Enriched predictions with stakes and PnL (if enabled)
+  - CSV: `home_win_rates_sorted_<date>.csv`
   - Visualization: Bankroll simulation charts
+  - Database: Enriched predictions with stakes and P&L (if enabled)
 - **Features**:
-  - Half-Kelly conservative sizing
+  - Half-Kelly conservative sizing (50% fraction)
   - Stake caps (30% max, €300 absolute)
-  - Three strategies (Raw, Platt, Isotonic)
+  - Three calibration strategies (Raw, Platt, Isotonic)
+  - Multi-sportsbook odds (DraftKings, FanDuel, etc.)
 
-### 6. Script 6: Display Proposed Bets
-**File**: `2026/src/6_proposed_bets_2026.py`
-- **Purpose**: Shows today's recommended bets
-- **Output**: Console display of filtered betting opportunities
-- **Features**: Database-first loading with CSV fallback
+### 5. Complete Pipeline
+**Command**: `nba-predict pipeline`
+- **Purpose**: Runs entire workflow end-to-end
+- **Steps**: Collection → Prediction → Analysis → Recommendations
+- **Options**: `--skip-collection`, `--skip-analysis` for partial runs
 
 ---
 
@@ -187,31 +201,36 @@ docker-compose run --rm app nba-predict predict
 
 See **[DOCKER.md](DOCKER.md)** for complete Docker setup guide.
 
-### Alternative: Running Scripts Directly
+### Alternative: Using Python Modules Directly
 
-Scripts can also be run directly:
+You can also import and use the modules directly in Python:
 
-```bash
-# Collect historical game data
-python 2026/src/collect_historical_games.py
+```python
+from src.core.collector import HistoricalGameCollector, UpcomingGameCollector
+from src.core.predictor import LightGBMPredictor
+from src.core.analyzer import BettingPerformanceAnalyzer
+from src.core.betting import KellyCriterionCalculator
+from src.utils.nba_utils import get_current_date
 
-# Collect upcoming game schedule
-python 2026/src/collect_upcoming_games.py
+# Collect data
+date = get_current_date()
+collector = HistoricalGameCollector(date)
+collector.collect_games_for_date()
 
-# Generate predictions
-python 2026/src/generate_predictions.py
+# Make predictions
+predictor = LightGBMPredictor()
+predictions = predictor.predict_games(date)
 
-# Calculate betting statistics
-python 2026/src/calculate_betting_statistics.py
+# Analyze performance
+analyzer = BettingPerformanceAnalyzer()
+stats = analyzer.analyze(date)
 
-# Calculate Kelly Criterion parameters
-python 2026/src/calculate_kelly_parameters.py
-
-# View betting recommendations
-python 2026/src/show_bet_recommendations.py
+# Calculate Kelly stakes
+kelly = KellyCriterionCalculator()
+recommendations = kelly.calculate(date)
 ```
 
-**Note:** The CLI interface (`nba-predict`) is recommended for better UX and error handling.
+**Note:** The CLI interface (`nba-predict`) is recommended for better UX, error handling, and logging.
 
 ---
 
@@ -274,7 +293,7 @@ Run the test suite:
 pytest tests/ -v
 
 # With coverage
-pytest tests/ --cov=2026/src --cov-report=html
+pytest tests/ --cov=src --cov-report=html
 
 # Database tests (requires USE_DATABASE=true)
 pytest tests/test_database_integration.py -v
@@ -282,16 +301,18 @@ pytest tests/test_database_integration.py -v
 # Run specific test modules
 pytest tests/test_error_handlers.py -v
 pytest tests/test_migration_scripts.py -v
+pytest tests/test_cli.py -v
 ```
 
 **Test Coverage** (262 tests, 100% pass rate):
-- ✅ **Betting utilities** (38 tests) - Kelly Criterion, odds conversion, stake sizing
+- ✅ **Betting utilities** (67 tests) - Kelly Criterion, odds conversion, stake sizing, probability calibration
+- ✅ **Team normalization** (83 tests) - All team code mappings and aliases
 - ✅ **Data processing** (24 tests) - Rolling averages, preprocessing, target creation
-- ✅ **Team normalization** (60+ tests) - All team code mappings
-- ✅ **Database integration** (25 tests) - CRUD operations, graceful fallback
-- ✅ **Error handling** (38 tests) - Retry logic, validation, context managers
-- ✅ **Migration scripts** (25 tests) - CSV to PostgreSQL migration
+- ✅ **Error handling** (38 tests) - Retry logic, validation, context managers, error recovery
+- ✅ **Database integration** (25 tests) - CRUD operations, graceful CSV fallback
 - ✅ **Logger infrastructure** (25 tests) - Logging configuration and output
+- ✅ **CLI commands** (20+ tests) - Command execution and argument parsing
+- ✅ **Migration scripts** (25+ tests) - CSV to PostgreSQL data migration
 
 **CI/CD**: Automated testing on every push via GitHub Actions
 
@@ -352,18 +373,63 @@ python database/scripts/migrate_enriched_predictions.py
 
 ```
 Basketball_prediction/
-├── 2026/
-│   ├── src/                      # Main Python scripts (1-6)
-│   ├── data/                     # CSV outputs
-│   └── output/                   # Predictions and statistics
+├── src/                          # Modern refactored codebase (~7,461 LOC)
+│   ├── cli.py                    # Click CLI entry point (nba-predict command)
+│   ├── commands/                 # CLI command implementations
+│   │   ├── collect.py            # Data collection commands
+│   │   ├── predict.py            # Prediction generation
+│   │   ├── analyze.py            # Analysis & Kelly calculations
+│   │   └── pipeline.py           # Complete workflow orchestration
+│   ├── core/                     # Core business logic
+│   │   ├── collector.py          # HistoricalGameCollector, UpcomingGameCollector
+│   │   ├── predictor.py          # GameDataPreprocessor, MatchupBuilder, LightGBMPredictor
+│   │   ├── analyzer.py           # BettingPerformanceAnalyzer, HomeWinRateCalculator
+│   │   ├── betting.py            # OddsManager, ProbabilityCalibrator, KellyCriterion
+│   │   └── constants.py          # Shared constants (team codes, Kelly defaults)
+│   └── utils/                    # Utilities
+│       ├── nba_utils.py          # Shared functions (team codes, dates, web scraping)
+│       ├── logger.py             # Logging configuration
+│       ├── error_handlers.py     # Error handling & retries
+│       ├── db_utils.py           # Database operations
+│       └── config_loader.py      # Configuration management
+├── dashboard/                    # Streamlit web interface
+│   ├── app.py                    # Home page
+│   ├── pages/                    # Multi-page app (Today's Games, Performance, etc.)
+│   ├── components/               # Reusable chart utilities
+│   └── utils/                    # Data loading for dashboard
 ├── database/
-│   ├── schemas/                  # PostgreSQL schema files
+│   ├── schemas/                  # PostgreSQL schema (8 tables, indexes, triggers)
 │   └── scripts/                  # Migration scripts
+├── output/                       # Generated data outputs
+│   ├── Gathering_Data/           # Collected game data
+│   │   ├── Whole_Statistic/      # Historical game CSVs
+│   │   ├── Next_Game/            # Upcoming schedules
+│   │   └── data/
+│   │       ├── 2026_standings/   # Monthly schedule HTML
+│   │       └── 2026_scores/      # Box score HTML
+│   └── LightGBM/                 # Predictions & analysis outputs
 ├── docs/                         # Documentation
-├── tests/                        # Unit tests (pytest)
+│   ├── PROJECT.md                # System overview & architecture
+│   ├── ARCHITECTURE.md           # Technical design details
+│   ├── DATABASE_SETUP.md         # Database configuration guide
+│   └── ERROR_HANDLING.md         # Error handling infrastructure
+├── tests/                        # 262 unit tests, 9 modules
+│   ├── test_betting_utils.py     # 67 tests
+│   ├── test_team_normalization.py # 83 tests
+│   ├── test_data_processing.py   # 24 tests
+│   ├── test_error_handlers.py    # 38 tests
+│   ├── test_database_integration.py # 25 tests
+│   ├── test_logger.py            # 25 tests
+│   ├── test_cli.py               # 20+ tests
+│   └── test_migration_scripts.py # 25+ tests
 ├── .github/workflows/            # CI/CD automation
+│   ├── daily_prediction_pipeline.yml  # Daily 06:00 UTC execution
+│   └── tests.yml                 # Test automation
 ├── .env.example                  # Environment template
-├── requirements.txt              # Python dependencies
+├── requirements.txt              # 23 dependencies
+├── setup.py                      # CLI installation config
+├── Dockerfile                    # Docker containerization
+├── docker-compose.yml            # Multi-container setup
 └── README.md                     # This file
 ```
 
