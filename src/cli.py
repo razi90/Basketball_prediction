@@ -277,6 +277,19 @@ def dashboard(port):
 
 def main():
     """Entry point for the CLI"""
+    # Initialize database connection if enabled
+    from utils.db_utils import initialize_database, close_database
+    import atexit
+
+    try:
+        initialize_database()
+        # Register cleanup handler to close database connections on exit
+        atexit.register(close_database)
+    except Exception as e:
+        # Log error but continue - app can fall back to CSV mode
+        click.echo(f"⚠️  Database initialization failed: {e}", err=True)
+        click.echo("Continuing in CSV-only mode...", err=True)
+
     cli()
 
 
