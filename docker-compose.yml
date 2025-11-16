@@ -34,7 +34,7 @@ services:
       - .env
     environment:
       - DATABASE_URL=postgresql://nba_user:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/nba_predictions
-      - USE_DATABASE=${USE_DATABASE:-false}
+      - USE_DATABASE=${USE_DATABASE:-true}
     volumes:
       - ./2026/data:/app/2026/data
       - ./2026/output:/app/2026/output
