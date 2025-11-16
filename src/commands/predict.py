@@ -101,14 +101,12 @@ def run_prediction(
             logger.warning("No ODDS_API_KEY found. Skipping odds fetching.")
             final_df = predictions_df
 
-        # Step 7: Save predictions
-        dirs = get_directory_paths()
-        prediction_dir = dirs["prediction_dir"]
-        os.makedirs(prediction_dir, exist_ok=True)
+        # Step 7: Save predictions to database
+        from src.utils.db_utils import DatabaseOperations
 
-        output_file = prediction_dir / f"nba_games_predict_{today_str}.csv"
-        final_df.to_csv(output_file, index=False)
-        logger.info(f"✅ Predictions saved to: {output_file}")
+        db_ops = DatabaseOperations()
+        rows_saved = db_ops.save_predictions(final_df)
+        logger.info(f"✅ Predictions saved to database: {rows_saved} rows")
 
         # Display top predictions
         logger.info("\n🎯 Today's Top Predictions:")

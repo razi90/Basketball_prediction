@@ -1,89 +1,95 @@
 """
 Data loading utilities for the dashboard.
 
-Loads prediction data, statistics, and historical results from CSV files
-or database (if configured).
+Loads prediction data, statistics, and historical results from database.
+CSV processing has been removed in favor of database-only approach.
 """
 
-import glob
 import os
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 import pandas as pd
 
-# Project paths
+# Add src to path for imports
 ROOT_DIR = Path(__file__).parent.parent.parent
-DATA_DIR = ROOT_DIR / "2026" / "data"
-OUTPUT_DIR = ROOT_DIR / "2026" / "output"
+sys.path.insert(0, str(ROOT_DIR))
+
+from src.utils.db_utils import DatabaseOperations, db_config
 
 
-def get_latest_file(pattern: str, directory: Path) -> Optional[Path]:
+def load_latest_predictions(limit: int = 100) -> Optional[pd.DataFrame]:
     """
-    Find the most recent file matching a pattern.
+    Load the most recent predictions from database.
 
     Args:
-        pattern: Glob pattern (e.g., "nba_games_*.csv")
-        directory: Directory to search
-
-    Returns:
-        Path to latest file or None if not found
-    """
-    files = list(directory.glob(pattern))
-    if not files:
-        return None
-    return max(files, key=lambda p: p.stat().st_mtime)
-
-
-def load_latest_predictions() -> Optional[pd.DataFrame]:
-    """
-    Load the most recent prediction file.
+        limit: Maximum number of predictions to load
 
     Returns:
         DataFrame with predictions or None if not found
     """
-    pred_file = get_latest_file("nba_games_predict_*.csv", OUTPUT_DIR)
-    if pred_file is None:
+    if not db_config.enabled:
         return None
 
-    df = pd.read_csv(pred_file)
-    return df
+    try:
+        db_ops = DatabaseOperations()
+        df = db_ops.get_latest_predictions(limit=limit)
+        return df if not df.empty else None
+    except Exception as e:
+        print(f"Error loading predictions: {e}")
+        return None
 
 
-def load_enriched_predictions() -> Optional[pd.DataFrame]:
+def load_enriched_predictions(limit: int = 100) -> Optional[pd.DataFrame]:
     """
-    Load the most recent enriched predictions with betting suggestions.
+    Load the most recent enriched predictions with betting suggestions from database.
+
+    Args:
+        limit: Maximum number of predictions to load
 
     Returns:
         DataFrame with enriched predictions or None if not found
     """
-    enrich_file = get_latest_file("combined_nba_predictions_enrich_*.csv", OUTPUT_DIR)
-    if enrich_file is None:
+    if not db_config.enabled:
         return None
 
-    df = pd.read_csv(enrich_file)
-    return df
+    try:
+        db_ops = DatabaseOperations()
+        # Try to get enriched predictions if available
+        df = db_ops.get_latest_predictions(limit=limit)
+        return df if not df.empty else None
+    except Exception as e:
+        print(f"Error loading enriched predictions: {e}")
+        return None
 
 
 def load_betting_statistics() -> Optional[pd.DataFrame]:
     """
-    Load betting statistics and accuracy metrics.
+    Load betting statistics and accuracy metrics from database.
 
     Returns:
         DataFrame with betting stats or None if not found
     """
-    stats_file = get_latest_file("combined_nba_predictions_acc_*.csv", OUTPUT_DIR)
-    if stats_file is None:
+    if not db_config.enabled:
         return None
 
-    df = pd.read_csv(stats_file)
-    return df
+    try:
+        db_ops = DatabaseOperations()
+        # Get betting performance metrics
+        metrics = db_ops.get_betting_performance()
+        if metrics:
+            return pd.DataFrame([metrics])
+        return None
+    except Exception as e:
+        print(f"Error loading betting statistics: {e}")
+        return None
 
 
 def load_historical_games(days_back: int = 30) -> Optional[pd.DataFrame]:
     """
-    Load historical game data from the past N days.
+    Load historical game data from the past N days from database.
 
     Args:
         days_back: Number of days of history to load
@@ -91,51 +97,48 @@ def load_historical_games(days_back: int = 30) -> Optional[pd.DataFrame]:
     Returns:
         DataFrame with historical games or None if not found
     """
-    all_games = []
-
-    # Load all game files from the past N days
-    for i in range(days_back):
-        date = datetime.now() - timedelta(days=i)
-        date_str = date.strftime("%Y-%m-%d")
-
-        game_file = DATA_DIR / f"nba_games_{date_str}.csv"
-        if game_file.exists():
-            df = pd.read_csv(game_file)
-            df["file_date"] = date_str
-            all_games.append(df)
-
-    if not all_games:
+    if not db_config.enabled:
         return None
 
-    return pd.concat(all_games, ignore_index=True)
+    try:
+        db_ops = DatabaseOperations()
+        df = db_ops.get_latest_game_statistics(limit=None)
+
+        if df.empty:
+            return None
+
+        # Filter to past N days
+        if "date" in df.columns:
+            df["date"] = pd.to_datetime(df["date"])
+            cutoff_date = datetime.now() - timedelta(days=days_back)
+            df = df[df["date"] >= cutoff_date]
+
+        return df if not df.empty else None
+    except Exception as e:
+        print(f"Error loading historical games: {e}")
+        return None
 
 
 def load_all_predictions(limit: int = 100) -> Optional[pd.DataFrame]:
     """
-    Load multiple prediction files for historical analysis.
+    Load multiple predictions for historical analysis from database.
 
     Args:
-        limit: Maximum number of files to load
+        limit: Maximum number of predictions to load
 
     Returns:
         DataFrame with all predictions or None if not found
     """
-    pred_files = sorted(
-        OUTPUT_DIR.glob("nba_games_predict_*.csv"), key=lambda p: p.stat().st_mtime, reverse=True
-    )[:limit]
-
-    if not pred_files:
+    if not db_config.enabled:
         return None
 
-    all_preds = []
-    for file in pred_files:
-        df = pd.read_csv(file)
-        # Extract date from filename: nba_games_predict_2025-10-23.csv
-        date_str = file.stem.replace("nba_games_predict_", "")
-        df["prediction_date"] = date_str
-        all_preds.append(df)
-
-    return pd.concat(all_preds, ignore_index=True)
+    try:
+        db_ops = DatabaseOperations()
+        df = db_ops.get_latest_predictions(limit=limit)
+        return df if not df.empty else None
+    except Exception as e:
+        print(f"Error loading all predictions: {e}")
+        return None
 
 
 def get_team_stats(team: str, df: pd.DataFrame) -> dict:
@@ -212,31 +215,42 @@ def calculate_model_metrics(df: pd.DataFrame) -> dict:
 
 def get_available_data_summary() -> dict:
     """
-    Get summary of available data files.
+    Get summary of available data from database.
 
     Returns:
-        Dictionary with file counts and date ranges
+        Dictionary with data counts and date ranges
     """
     summary = {
-        "prediction_files": len(list(OUTPUT_DIR.glob("nba_games_predict_*.csv"))),
-        "enriched_files": len(list(OUTPUT_DIR.glob("combined_nba_predictions_enrich_*.csv"))),
-        "stats_files": len(list(OUTPUT_DIR.glob("combined_nba_predictions_acc_*.csv"))),
-        "game_files": len(list(DATA_DIR.glob("nba_games_*.csv"))),
+        "database_enabled": db_config.enabled,
+        "prediction_count": 0,
+        "game_statistics_count": 0,
     }
 
-    # Get date range of predictions
-    pred_files = list(OUTPUT_DIR.glob("nba_games_predict_*.csv"))
-    if pred_files:
-        dates = []
-        for f in pred_files:
-            try:
-                date_str = f.stem.replace("nba_games_predict_", "")
-                dates.append(datetime.strptime(date_str, "%Y-%m-%d"))
-            except:
-                continue
+    if not db_config.enabled:
+        return summary
 
-        if dates:
-            summary["earliest_prediction"] = min(dates).strftime("%Y-%m-%d")
-            summary["latest_prediction"] = max(dates).strftime("%Y-%m-%d")
+    try:
+        db_ops = DatabaseOperations()
+
+        # Get prediction count
+        predictions = db_ops.get_latest_predictions(limit=1000)
+        summary["prediction_count"] = len(predictions)
+
+        if not predictions.empty and "date" in predictions.columns:
+            predictions["date"] = pd.to_datetime(predictions["date"])
+            summary["earliest_prediction"] = predictions["date"].min().strftime("%Y-%m-%d")
+            summary["latest_prediction"] = predictions["date"].max().strftime("%Y-%m-%d")
+
+        # Get game statistics count
+        games = db_ops.get_latest_game_statistics(limit=1000)
+        summary["game_statistics_count"] = len(games)
+
+        if not games.empty and "date" in games.columns:
+            games["date"] = pd.to_datetime(games["date"])
+            summary["earliest_game"] = games["date"].min().strftime("%Y-%m-%d")
+            summary["latest_game"] = games["date"].max().strftime("%Y-%m-%d")
+
+    except Exception as e:
+        print(f"Error getting data summary: {e}")
 
     return summary

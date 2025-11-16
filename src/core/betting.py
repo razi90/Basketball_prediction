@@ -1241,40 +1241,44 @@ class BetRecommendationDisplay:
 
     def load_recommendations(
         self,
-        file_path: Optional[Union[str, Path]] = None,
         min_stake: float = 0.0,
     ) -> pd.DataFrame:
         """
-        Load bet recommendations from enriched predictions file.
+        Load bet recommendations from enriched predictions in database.
 
         Args:
-            file_path: Path to enriched predictions CSV (auto-detects if None)
             min_stake: Minimum stake to include (filters out zero-stake bets)
 
         Returns:
             DataFrame with bet recommendations
 
         Raises:
-            FileNotFoundError: If file not found and auto-detection fails
+            RuntimeError: If database is not enabled
 
         Example:
             >>> display = BetRecommendationDisplay()
             >>> bets = display.load_recommendations(min_stake=1.0)
         """
-        with ErrorContext("Loading bet recommendations", logger=logger):
-            # Auto-detect file if not provided
-            if file_path is None:
-                file_path = self.find_latest_enriched_file()
-                if file_path is None:
-                    raise FileNotFoundError(
-                        f"No enriched predictions file found in {self.prediction_dir}"
-                    )
+        with ErrorContext("Loading bet recommendations from database", logger=logger):
+            from src.utils.db_utils import db_config, DatabaseOperations
 
-            # Load data
-            df = pd.read_csv(file_path)
+            if not db_config.enabled:
+                raise RuntimeError(
+                    "Database is not enabled. Set USE_DATABASE=true environment variable. "
+                    "CSV processing has been removed."
+                )
+
+            # Load enriched predictions from database
+            db_ops = DatabaseOperations()
+            df = db_ops.get_latest_predictions(limit=100)
+
+            if df.empty:
+                logger.warning("No enriched predictions found in database")
+                return df
+
             df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
-            log_dataframe_info(df, name="Enriched predictions", logger=logger)
+            log_dataframe_info(df, name="Enriched predictions from database", logger=logger)
 
             # Filter for bets with non-zero stakes
             mask = (

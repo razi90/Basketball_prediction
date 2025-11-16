@@ -187,9 +187,7 @@ class GameDataPreprocessor:
 
     def load_upcoming_games(self, date_str: str) -> pd.DataFrame:
         """
-        Load schedule of upcoming games for specified date.
-
-        Loads from database if enabled, otherwise falls back to CSV files.
+        Load schedule of upcoming games for specified date from database.
 
         Args:
             date_str: Date in format "YYYY-MM-DD"
@@ -198,6 +196,7 @@ class GameDataPreprocessor:
             DataFrame with columns: home_team, away_team, game_date
 
         Raises:
+            RuntimeError: If database is not enabled
             FileNotFoundError: If no games data exists
             DataValidationError: If required columns are missing
 
@@ -207,72 +206,41 @@ class GameDataPreprocessor:
             Index(['home_team', 'away_team', 'game_date'])
         """
         with ErrorContext("Loading game schedule", logger=logger):
-            # Try database first if enabled
             from src.utils.db_utils import db_config, DatabaseOperations
 
-            if db_config.enabled:
-                try:
-                    logger.info(f"Loading upcoming games from database for {date_str}")
-                    db_ops = DatabaseOperations()
-                    games_df = db_ops.get_upcoming_games(target_date=date_str)
+            if not db_config.enabled:
+                raise RuntimeError(
+                    "Database is not enabled. Set USE_DATABASE=true environment variable. "
+                    "CSV processing has been removed."
+                )
 
-                    if games_df.empty:
-                        logger.warning(f"No games found in database for {date_str}")
-                    else:
-                        # Validate required columns
-                        validate_dataframe(
-                            games_df, required_columns=["home_team", "away_team", "game_date"], allow_empty=True
-                        )
-                        logger.info(f"Loaded {len(games_df)} games from database")
-                        return games_df
-                except Exception as e:
-                    logger.warning(f"Failed to load from database: {e}. Falling back to CSV.")
-
-            # Fallback to CSV
-            next_game_dir = self.paths["NEXT_GAME_DIR"]
-            direct_path = os.path.join(next_game_dir, f"games_df_{date_str}.csv")
-
-            if os.path.exists(direct_path):
-                file_path = direct_path
-            else:
-                file_path = get_latest_file(next_game_dir, prefix="games_df_", ext=".csv")
-                if not file_path:
-                    raise FileNotFoundError(
-                        f"No games found in database or CSV files. "
-                        f"Run 'nba-predict collect upcoming' first."
-                    )
-                logger.info(f"games_df for {date_str} not found. Falling back to {file_path}")
-
-            games_df = pd.read_csv(file_path)
-
-            # Remove index column if present
-            if "Unnamed: 0" in games_df.columns:
-                games_df = games_df.drop(columns=["Unnamed: 0"])
+            logger.info(f"Loading upcoming games from database for {date_str}")
+            db_ops = DatabaseOperations()
+            games_df = db_ops.get_upcoming_games(target_date=date_str)
 
             if games_df.empty:
-                logger.warning("games_df is empty (season might be over).")
+                logger.warning(f"No games found in database for {date_str}")
+            else:
+                # Validate required columns
+                validate_dataframe(
+                    games_df, required_columns=["home_team", "away_team", "game_date"], allow_empty=True
+                )
+                logger.info(f"Loaded {len(games_df)} games from database")
 
-            # Validate required columns
-            validate_dataframe(
-                games_df, required_columns=["home_team", "away_team", "game_date"], allow_empty=True
-            )
-
-            logger.info(f"Loaded game schedule from {file_path} with {len(games_df)} games")
             return games_df
 
     def load_historical_stats(self, date_str: str) -> pd.DataFrame:
         """
-        Load historical game statistics for teams.
-
-        Loads from database if enabled, otherwise falls back to CSV files.
+        Load historical game statistics for teams from database.
 
         Args:
-            date_str: Date in format "YYYY-MM-DD"
+            date_str: Date in format "YYYY-MM-DD" (used for logging/context only)
 
         Returns:
             DataFrame with team game statistics and features
 
         Raises:
+            RuntimeError: If database is not enabled
             FileNotFoundError: If no stats data exists
 
         Example:
@@ -281,50 +249,29 @@ class GameDataPreprocessor:
             5000
         """
         with ErrorContext("Loading game statistics", logger=logger):
-            # Try database first if enabled
             from src.utils.db_utils import db_config, DatabaseOperations
 
-            if db_config.enabled:
-                try:
-                    logger.info(f"Loading historical game statistics from database")
-                    db_ops = DatabaseOperations()
-                    df = db_ops.get_latest_game_statistics(limit=None)  # Get all records
+            if not db_config.enabled:
+                raise RuntimeError(
+                    "Database is not enabled. Set USE_DATABASE=true environment variable. "
+                    "CSV processing has been removed."
+                )
 
-                    if df.empty:
-                        logger.warning("No game statistics found in database")
-                    else:
-                        # Remove index column if present
-                        if "Unnamed: 0" in df.columns:
-                            df = df.drop(columns=["Unnamed: 0"])
+            logger.info(f"Loading historical game statistics from database")
+            db_ops = DatabaseOperations()
+            df = db_ops.get_latest_game_statistics(limit=None)  # Get all records
 
-                        log_dataframe_info(df, name="Game statistics (from database)", logger=logger)
-                        return df
-                except Exception as e:
-                    logger.warning(f"Failed to load from database: {e}. Falling back to CSV.")
-
-            # Fallback to CSV
-            stat_dir = self.paths["STAT_DIR"]
-            direct_path = os.path.join(stat_dir, f"nba_games_{date_str}.csv")
-
-            if os.path.exists(direct_path):
-                df_path = direct_path
-            else:
-                logger.info(f"Stats file for {date_str} not found. Searching latest in {stat_dir}...")
-                df_path = get_latest_file(stat_dir, prefix="nba_games_", ext=".csv")
-                if not df_path:
-                    raise FileNotFoundError(
-                        f"No game statistics found in database or CSV files. "
-                        f"Run 'nba-predict collect historical' first."
-                    )
-                logger.info(f"Using latest stats file: {df_path}")
-
-            df = pd.read_csv(df_path)
+            if df.empty:
+                raise FileNotFoundError(
+                    "No game statistics found in database. "
+                    "Run 'nba-predict collect historical' first."
+                )
 
             # Remove index column if present
             if "Unnamed: 0" in df.columns:
                 df = df.drop(columns=["Unnamed: 0"])
 
-            log_dataframe_info(df, name="Game statistics (from CSV)", logger=logger)
+            log_dataframe_info(df, name="Game statistics (from database)", logger=logger)
             return df
 
     def add_target_variable(self, df: pd.DataFrame) -> pd.DataFrame:
