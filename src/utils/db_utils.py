@@ -239,32 +239,43 @@ class DatabaseOperations:
             return inserted
 
     def get_latest_game_statistics(
-        self, team: Optional[str] = None, limit: int = 100
+        self, team: Optional[str] = None, limit: Optional[int] = 100
     ) -> pd.DataFrame:
         """
         Retrieve latest game statistics.
 
         Args:
             team: Optional team code filter
-            limit: Maximum number of records
+            limit: Maximum number of records (None = all records)
 
         Returns:
             DataFrame with game statistics
         """
         with ErrorContext("Retrieving game statistics from database", logger=logger):
             with self.pool.get_connection() as conn:
-                query = """
-                    SELECT * FROM game_statistics
-                    WHERE 1=1
-                    {team_filter}
-                    ORDER BY date DESC
-                    LIMIT %s
-                """
-
-                team_filter = "AND team = %s" if team else ""
-                query = query.format(team_filter=team_filter)
-
-                params = [team, limit] if team else [limit]
+                if limit is None:
+                    # Get all records
+                    query = """
+                        SELECT * FROM game_statistics
+                        WHERE 1=1
+                        {team_filter}
+                        ORDER BY date DESC
+                    """
+                    team_filter = "AND team = %s" if team else ""
+                    query = query.format(team_filter=team_filter)
+                    params = [team] if team else None
+                else:
+                    # Get limited records
+                    query = """
+                        SELECT * FROM game_statistics
+                        WHERE 1=1
+                        {team_filter}
+                        ORDER BY date DESC
+                        LIMIT %s
+                    """
+                    team_filter = "AND team = %s" if team else ""
+                    query = query.format(team_filter=team_filter)
+                    params = [team, limit] if team else [limit]
 
                 df = pd.read_sql_query(query, conn, params=params)
                 logger.info(f"Retrieved {len(df)} game statistics")
@@ -312,28 +323,41 @@ class DatabaseOperations:
             logger.info(f"Saved {inserted} game schedules to database")
             return inserted
 
-    def get_upcoming_games(self, days_ahead: int = 7) -> pd.DataFrame:
+    def get_upcoming_games(self, days_ahead: int = 7, target_date: Optional[str] = None) -> pd.DataFrame:
         """
         Get upcoming game schedule.
 
         Args:
             days_ahead: Number of days to look ahead
+            target_date: Specific date in YYYY-MM-DD format (optional)
 
         Returns:
             DataFrame with upcoming games
         """
         with ErrorContext("Retrieving upcoming games from database", logger=logger):
             with self.pool.get_connection() as conn:
-                query = """
-                    SELECT *
-                    FROM game_schedule
-                    WHERE game_date >= CURRENT_DATE
-                      AND game_date <= CURRENT_DATE + INTERVAL '%s days'
-                    ORDER BY game_date
-                """
+                if target_date:
+                    # Get games for specific date
+                    query = """
+                        SELECT home_team, away_team, game_date
+                        FROM game_schedule
+                        WHERE game_date = %s
+                        ORDER BY game_date
+                    """
+                    df = pd.read_sql_query(query, conn, params=[target_date])
+                    logger.info(f"Retrieved {len(df)} games for {target_date}")
+                else:
+                    # Get games for next N days
+                    query = """
+                        SELECT home_team, away_team, game_date
+                        FROM game_schedule
+                        WHERE game_date >= CURRENT_DATE
+                          AND game_date <= CURRENT_DATE + INTERVAL '%s days'
+                        ORDER BY game_date
+                    """
+                    df = pd.read_sql_query(query, conn, params=[days_ahead])
+                    logger.info(f"Retrieved {len(df)} upcoming games")
 
-                df = pd.read_sql_query(query, conn, params=[days_ahead])
-                logger.info(f"Retrieved {len(df)} upcoming games")
                 return df
 
     # ─────────────────────────────────────────────────────

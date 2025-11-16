@@ -189,8 +189,7 @@ class GameDataPreprocessor:
         """
         Load schedule of upcoming games for specified date.
 
-        Attempts to load games_df_{date}.csv. If not found, falls back to
-        most recent games_df_*.csv file.
+        Loads from database if enabled, otherwise falls back to CSV files.
 
         Args:
             date_str: Date in format "YYYY-MM-DD"
@@ -199,7 +198,7 @@ class GameDataPreprocessor:
             DataFrame with columns: home_team, away_team, game_date
 
         Raises:
-            FileNotFoundError: If no games_df files exist
+            FileNotFoundError: If no games data exists
             DataValidationError: If required columns are missing
 
         Example:
@@ -208,6 +207,28 @@ class GameDataPreprocessor:
             Index(['home_team', 'away_team', 'game_date'])
         """
         with ErrorContext("Loading game schedule", logger=logger):
+            # Try database first if enabled
+            from src.utils.db_utils import db_config, DatabaseOperations
+
+            if db_config.enabled:
+                try:
+                    logger.info(f"Loading upcoming games from database for {date_str}")
+                    db_ops = DatabaseOperations()
+                    games_df = db_ops.get_upcoming_games(target_date=date_str)
+
+                    if games_df.empty:
+                        logger.warning(f"No games found in database for {date_str}")
+                    else:
+                        # Validate required columns
+                        validate_dataframe(
+                            games_df, required_columns=["home_team", "away_team", "game_date"], allow_empty=True
+                        )
+                        logger.info(f"Loaded {len(games_df)} games from database")
+                        return games_df
+                except Exception as e:
+                    logger.warning(f"Failed to load from database: {e}. Falling back to CSV.")
+
+            # Fallback to CSV
             next_game_dir = self.paths["NEXT_GAME_DIR"]
             direct_path = os.path.join(next_game_dir, f"games_df_{date_str}.csv")
 
@@ -216,7 +237,10 @@ class GameDataPreprocessor:
             else:
                 file_path = get_latest_file(next_game_dir, prefix="games_df_", ext=".csv")
                 if not file_path:
-                    raise FileNotFoundError(f"No games_df_*.csv found in {next_game_dir}")
+                    raise FileNotFoundError(
+                        f"No games found in database or CSV files. "
+                        f"Run 'nba-predict collect upcoming' first."
+                    )
                 logger.info(f"games_df for {date_str} not found. Falling back to {file_path}")
 
             games_df = pd.read_csv(file_path)
@@ -240,8 +264,7 @@ class GameDataPreprocessor:
         """
         Load historical game statistics for teams.
 
-        Attempts to load nba_games_{date}.csv. If not found, falls back to
-        most recent nba_games_*.csv file.
+        Loads from database if enabled, otherwise falls back to CSV files.
 
         Args:
             date_str: Date in format "YYYY-MM-DD"
@@ -250,7 +273,7 @@ class GameDataPreprocessor:
             DataFrame with team game statistics and features
 
         Raises:
-            FileNotFoundError: If no stats files exist
+            FileNotFoundError: If no stats data exists
 
         Example:
             >>> stats_df = preprocessor.load_historical_stats("2025-11-16")
@@ -258,6 +281,28 @@ class GameDataPreprocessor:
             5000
         """
         with ErrorContext("Loading game statistics", logger=logger):
+            # Try database first if enabled
+            from src.utils.db_utils import db_config, DatabaseOperations
+
+            if db_config.enabled:
+                try:
+                    logger.info(f"Loading historical game statistics from database")
+                    db_ops = DatabaseOperations()
+                    df = db_ops.get_latest_game_statistics(limit=None)  # Get all records
+
+                    if df.empty:
+                        logger.warning("No game statistics found in database")
+                    else:
+                        # Remove index column if present
+                        if "Unnamed: 0" in df.columns:
+                            df = df.drop(columns=["Unnamed: 0"])
+
+                        log_dataframe_info(df, name="Game statistics (from database)", logger=logger)
+                        return df
+                except Exception as e:
+                    logger.warning(f"Failed to load from database: {e}. Falling back to CSV.")
+
+            # Fallback to CSV
             stat_dir = self.paths["STAT_DIR"]
             direct_path = os.path.join(stat_dir, f"nba_games_{date_str}.csv")
 
@@ -267,7 +312,10 @@ class GameDataPreprocessor:
                 logger.info(f"Stats file for {date_str} not found. Searching latest in {stat_dir}...")
                 df_path = get_latest_file(stat_dir, prefix="nba_games_", ext=".csv")
                 if not df_path:
-                    raise FileNotFoundError(f"No nba_games_*.csv files found in {stat_dir}")
+                    raise FileNotFoundError(
+                        f"No game statistics found in database or CSV files. "
+                        f"Run 'nba-predict collect historical' first."
+                    )
                 logger.info(f"Using latest stats file: {df_path}")
 
             df = pd.read_csv(df_path)
@@ -276,7 +324,7 @@ class GameDataPreprocessor:
             if "Unnamed: 0" in df.columns:
                 df = df.drop(columns=["Unnamed: 0"])
 
-            log_dataframe_info(df, name="Game statistics", logger=logger)
+            log_dataframe_info(df, name="Game statistics (from CSV)", logger=logger)
             return df
 
     def add_target_variable(self, df: pd.DataFrame) -> pd.DataFrame:
