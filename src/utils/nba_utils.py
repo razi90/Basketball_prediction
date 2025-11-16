@@ -210,7 +210,13 @@ def get_html(
         chrome_options.add_argument("--disable-dev-tools")
         chrome_options.add_argument("--remote-debugging-port=9222")
 
-        service = Service(ChromeDriverManager().install())
+        # Use system-installed chromedriver (from chromium-driver package)
+        # This supports both amd64 and arm64 architectures
+        service = Service("/usr/local/bin/chromedriver")
+
+        # Set chromium binary path for compatibility
+        chrome_options.binary_location = "/usr/bin/google-chrome"
+
         driver = webdriver.Chrome(service=service, options=chrome_options)
 
         # try up to `retries` with exponential backoff
