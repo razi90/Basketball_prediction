@@ -53,23 +53,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Chrome for Selenium (modern approach without deprecated apt-key)
-RUN wget -q -O /tmp/google-chrome-key.gpg https://dl-ssl.google.com/linux/linux_signing_key.pub \
-    && gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg /tmp/google-chrome-key.gpg \
-    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable \
-    && rm -rf /var/lib/apt/lists/* /tmp/google-chrome-key.gpg
+# Install Chromium for Selenium (multi-architecture support)
+# Chromium supports both amd64 and arm64, unlike Chrome which is amd64-only
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    chromium \
+    chromium-driver && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install ChromeDriver (using Chrome for Testing endpoints)
-RUN CHROME_VERSION=$(google-chrome --version | sed 's/Google Chrome //g') && \
-    CHROME_MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d. -f1) && \
-    CHROMEDRIVER_VERSION=$(curl -sS "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_${CHROME_MAJOR_VERSION}") && \
-    wget -q -O /tmp/chromedriver.zip "https://storage.googleapis.com/chrome-for-testing-public/${CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip" && \
-    unzip /tmp/chromedriver.zip -d /tmp/ && \
-    mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/ && \
-    rm -rf /tmp/chromedriver.zip /tmp/chromedriver-linux64 && \
-    chmod +x /usr/local/bin/chromedriver
+# Create symbolic links for compatibility with scripts expecting 'google-chrome' and 'chromedriver'
+RUN ln -s /usr/bin/chromium /usr/bin/google-chrome && \
+    ln -s /usr/bin/chromedriver /usr/local/bin/chromedriver
 
 WORKDIR /app
 
