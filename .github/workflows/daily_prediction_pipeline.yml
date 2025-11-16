@@ -1,0 +1,104 @@
+name: "🏀 Complete Daily NBA Prediction Pipeline"
+
+on:
+  workflow_dispatch:      # Manual trigger
+  schedule:
+    # Run every day at 06:00 UTC (before games typically start)
+    - cron: "0 6 * * *"
+
+jobs:
+  run_pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 2. Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+
+      # 3. Install Google Chrome (required for Selenium web scraping)
+      - name: Install Google Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget gnupg unzip
+          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-linux-signing-keyring.gpg
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux-signing-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+          google-chrome --version
+
+      # 4. Install Python dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 5. Create .env file from secrets
+      - name: Create .env file
+        run: |
+          echo "ODDS_API_KEY=${{ secrets.ODDS_API_KEY }}" > .env
+
+      # 5.5. Run unit tests
+      - name: Run unit tests
+        env:
+          PYTHONWARNINGS: "ignore"
+        run: |
+          echo "🧪 Running unit tests with coverage..."
+          pytest tests/ -v --cov=src --cov-report=term-missing --cov-report=html
+          echo "✅ All tests passed"
+        continue-on-error: false  # Fail workflow if tests fail
+
+      # 6-10. Run complete prediction pipeline using CLI
+      - name: "Run NBA Prediction Pipeline"
+        env:
+          PYTHONWARNINGS: "ignore"
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: |
+          echo "🚀 Running complete NBA prediction pipeline..."
+          python -m src.cli pipeline
+          echo "✅ Pipeline completed"
+
+      # 11. Configure Git for committing
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      # 12. Commit and push new data files
+      - name: Commit and push updates
+        run: |
+          git add output/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "🤖 Automated daily prediction update - $(date +'%Y-%m-%d')"
+            git push
+          fi
+
+      # 13. Upload artifacts for manual download
+      - name: Upload prediction artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nba-predictions-${{ github.run_number }}
+          path: |
+            output/Gathering_Data/**/*.csv
+            output/LightGBM/**/*.csv
+          if-no-files-found: warn
+          retention-days: 30
+
+      # 14. Display today's recommended bets (optional)
+      - name: Display today's recommended bets
+        env:
+          PYTHONWARNINGS: "ignore"
+        run: |
+          echo "🎯 Today's Recommended Bets:"
+          python -m src.cli analyze recommendations || echo "No bets recommended for today"
+        continue-on-error: true
