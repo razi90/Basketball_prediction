@@ -16,7 +16,6 @@ from src.core.predictor import (
     get_directory_paths,
 )
 from src.utils.logger import get_logger
-from src.utils.nba_utils import CURRENT_SEASON
 
 logger = get_logger(__name__)
 
@@ -43,7 +42,7 @@ def run_prediction(
         today_str = today.strftime("%Y-%m-%d")
 
         # Initialize components
-        preprocessor = GameDataPreprocessor(season=CURRENT_SEASON)
+        preprocessor = GameDataPreprocessor()
         builder = MatchupBuilder()
         predictor = LightGBMPredictor()
 
