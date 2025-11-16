@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gnupg \
     unzip \
     curl \
+    netcat-openbsd \
     ca-certificates \
     fonts-liberation \
     libasound2 \
