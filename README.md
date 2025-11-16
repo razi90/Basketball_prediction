@@ -373,7 +373,7 @@ python database/scripts/migrate_enriched_predictions.py
 
 ```
 Basketball_prediction/
-├── src/                          # Modern refactored codebase (~7,461 LOC)
+├── src/                          # Modern refactored codebase
 │   ├── cli.py                    # Click CLI entry point (nba-predict command)
 │   ├── commands/                 # CLI command implementations
 │   │   ├── collect.py            # Data collection commands

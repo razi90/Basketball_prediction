@@ -45,7 +45,6 @@ The Basketball Prediction System is a sophisticated, automated platform for pred
 
 ### Key Metrics
 
-- **~7,461** lines of production code in `src/`
 - **262** passing tests across 9 test modules
 - **~24,773** historical games per season
 - **155+** features per game (basic + advanced stats)
@@ -787,7 +786,7 @@ nba-predict dashboard
 
 ```
 Basketball_prediction/
-├── src/                            # Modern refactored codebase (~7,461 LOC)
+├── src/                            # Modern refactored codebase
 │   ├── cli.py                      # Click CLI entry point
 │   ├── commands/                   # CLI command implementations
 │   │   ├── collect.py              # Data collection
