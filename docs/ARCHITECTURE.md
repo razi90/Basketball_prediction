@@ -26,22 +26,35 @@ Last Updated: 2025-11-15
 
 ### Design Principles
 
-1. **Modularity**: Each script has a single, well-defined responsibility
-2. **Automation**: Fully automated via GitHub Actions
-3. **Idempotency**: Scripts can be re-run safely
-4. **Data-Driven**: All decisions based on historical data
-5. **Test-First**: Critical functions have 100% test coverage
-6. **Cross-Platform**: Works on Windows, Linux, macOS
+1. **Modularity**: Separation into CLI, Core, and Utilities layers with clear responsibilities
+2. **Class-Based Design**: Object-oriented architecture for better testability and reusability
+3. **Automation**: Fully automated via GitHub Actions
+4. **Idempotency**: Operations can be re-run safely
+5. **Data-Driven**: All decisions based on historical data
+6. **Test-First**: Critical functions have comprehensive test coverage
+7. **Cross-Platform**: Works on Windows, Linux, macOS
+8. **Graceful Degradation**: CSV fallback when database unavailable
 
 ### Architecture Style
 
-**Pipeline Architecture** (Sequential Data Processing)
+**Layered Architecture** with **Pipeline Pattern**
 
+```
+CLI Layer (commands/)
+    ↓
+Core Business Logic (core/)
+    ↓
+Utilities (utils/)
+    ↓
+Data Storage (CSV + Optional Database)
+```
+
+The system follows a pipeline architecture where:
 ```
 Input → Transform → Enrich → Model → Decide → Output
 ```
 
-Each stage produces output consumed by the next stage, with CSV files as the data interchange format.
+Each stage is encapsulated in dedicated classes, producing output consumed by the next stage, with CSV files and optional database as the data interchange format.
 
 ---
 
@@ -69,26 +82,37 @@ Each stage produces output consumed by the next stage, with CSV files as the dat
 - Not real-time
 - Sequential (not parallel)
 
-### 2. Shared Utilities Pattern
+### 2. Layered Architecture Pattern
 
 ```
 ┌─────────────────────────────────────┐
-│         nba_utils_2026.py          │
-│  (Shared Functions & Constants)    │
+│       CLI Layer (src/cli.py)       │
+│         (Click Commands)            │
 └─────────────────────────────────────┘
-       ↑           ↑           ↑
-       │           │           │
-  ┌────┴───┐  ┌───┴────┐ ┌────┴───┐
-  │Script 1│  │Script 3│ │Script 5│
-  └────────┘  └────────┘ └────────┘
+       ↓           ↓           ↓
+┌─────────────────────────────────────┐
+│    Commands Layer (src/commands/)   │
+│  collect, predict, analyze, pipeline│
+└─────────────────────────────────────┘
+       ↓           ↓           ↓
+┌─────────────────────────────────────┐
+│   Core Layer (src/core/)            │
+│  collector, predictor, analyzer,    │
+│  betting, constants                 │
+└─────────────────────────────────────┘
+       ↓           ↓           ↓
+┌─────────────────────────────────────┐
+│   Utilities Layer (src/utils/)      │
+│  nba_utils, logger, error_handlers, │
+│  db_utils, config_loader            │
+└─────────────────────────────────────┘
 ```
 
-**Shared Utilities**:
-- Team code normalization
-- Kelly Criterion calculations
-- Odds conversions
-- Rolling averages
-- Web scraping helpers
+**Separation of Concerns**:
+- **CLI**: User interface, command routing, argument parsing
+- **Commands**: Command implementation, workflow orchestration
+- **Core**: Business logic, data processing, ML, betting strategy
+- **Utils**: Shared functions, error handling, logging, database
 
 ### 3. Adapter Pattern (External Services)
 
@@ -118,26 +142,37 @@ Each stage produces output consumed by the next stage, with CSV files as the dat
 
 ## Component Details
 
-### Script 1: Data Collection (Scraping)
+### Data Collection Layer (`src/core/collector.py`)
 
-**Purpose**: Scrape completed NBA games from Basketball-Reference.com
+**Purpose**: Scrape NBA game data from Basketball-Reference.com
 
 **Architecture**:
 ```python
 ┌─────────────────────────────────────────┐
-│  1_get_data_previous_game_day_2026.py  │
+│          collector.py                   │
 ├─────────────────────────────────────────┤
 │                                         │
-│  main()                                 │
-│  ├─ get_directory_paths()              │
-│  ├─ scrape_season_for_month()          │
-│  │  └─ get_html() [Selenium]           │
-│  ├─ scrape_game_day_boxscores()        │
-│  │  └─ get_html() [Selenium]           │
-│  └─ process_saved_boxscores()          │
-│     ├─ parse_html() [BeautifulSoup]    │
-│     ├─ read_stats()                     │
-│     └─ pd.concat() → CSV               │
+│  HistoricalGameCollector                │
+│  ├─ __init__(date, use_db)             │
+│  ├─ collect_games_for_date()           │
+│  │  ├─ scrape_season_for_month()       │
+│  │  │  └─ get_html() [Selenium]        │
+│  │  ├─ scrape_game_day_boxscores()     │
+│  │  │  └─ get_html() [Selenium]        │
+│  │  └─ process_saved_boxscores()       │
+│  │     ├─ parse_html() [BeautifulSoup] │
+│  │     ├─ read_stats()                  │
+│  │     ├─ pd.concat() → CSV            │
+│  │     └─ save_to_database() [optional]│
+│  └─ get_directory_paths()              │
+│                                         │
+│  UpcomingGameCollector                  │
+│  ├─ __init__(date, use_db)             │
+│  ├─ collect_upcoming_games()           │
+│  │  ├─ find_games_for_next_day()       │
+│  │  ├─ parse_html() [BeautifulSoup]    │
+│  │  └─ save_schedule()                 │
+│  └─ fallback_to_next_day()             │
 │                                         │
 └─────────────────────────────────────────┘
 
@@ -146,6 +181,7 @@ External Dependencies:
 - ChromeDriver (headless Chrome)
 - BeautifulSoup (HTML parsing)
 - Basketball-Reference.com (data source)
+- DatabaseOperations (optional storage)
 ```
 
 **Key Design Decisions**:
@@ -182,86 +218,49 @@ nba_games_YYYY-MM-DD.csv
 
 ---
 
-### Script 2: Schedule Collection
+### Prediction & ML Layer (`src/core/predictor.py`)
 
-**Purpose**: Get upcoming game schedule
-
-**Architecture**:
-```python
-┌─────────────────────────────────────────┐
-│  2_get_data_next_game_day_2026.py      │
-├─────────────────────────────────────────┤
-│                                         │
-│  main()                                 │
-│  ├─ find_games_for_next_day()          │
-│  │  ├─ get_html()                      │
-│  │  ├─ parse_html()                    │
-│  │  └─ extract schedule table          │
-│  └─ pd.DataFrame() → CSV               │
-│                                         │
-└─────────────────────────────────────────┘
-```
-
-**Fallback Logic**:
-```python
-if no_games_found(today):
-    check_tomorrow()
-if still_no_games:
-    return_empty_schedule()
-```
-
-**Output Schema**:
-```python
-{
-    "home_team": str,    # e.g., "LAL"
-    "away_team": str,    # e.g., "BOS"
-    "game_date": str,    # e.g., "2025-10-23"
-}
-```
-
----
-
-### Script 3: Prediction & Odds Integration
-
-**Purpose**: Train ML model, predict games, fetch odds
+**Purpose**: Preprocess data, build matchups, train ML model, generate predictions
 
 **Architecture**:
 ```python
 ┌──────────────────────────────────────────┐
-│   3_predict_games_hybrid_2026.py        │
+│           predictor.py                   │
 ├──────────────────────────────────────────┤
 │                                          │
-│  main()                                  │
-│  ├─ Load Data                            │
-│  │  ├─ get_latest_file()                │
-│  │  └─ pd.read_csv()                    │
-│  │                                       │
-│  ├─ Data Processing                      │
-│  │  ├─ preprocess_nba_data()            │
+│  GameDataPreprocessor                    │
+│  ├─ __init__()                           │
+│  ├─ preprocess(df)                       │
+│  │  ├─ add_target_variable()            │
 │  │  ├─ calculate_rolling_averages()     │
 │  │  ├─ normalize_team_codes()           │
 │  │  └─ add_next_game_columns()          │
-│  │                                       │
-│  ├─ Feature Engineering                  │
+│  └─ validate_data()                      │
+│                                          │
+│  MatchupBuilder                          │
+│  ├─ __init__()                           │
+│  ├─ build_matchups(df)                   │
 │  │  ├─ self_merge() [home vs away]     │
-│  │  └─ MinMaxScaler()                   │
-│  │                                       │
-│  ├─ Model Training                       │
-│  │  ├─ train_test_split(80/20)         │
+│  │  ├─ create_opponent_features(_opp)  │
+│  │  └─ apply_scaling(MinMaxScaler)     │
+│  └─ get_feature_names()                  │
+│                                          │
+│  LightGBMPredictor                       │
+│  ├─ __init__(use_db)                    │
+│  ├─ train(X_train, y_train)             │
 │  │  ├─ LGBMClassifier.fit()             │
-│  │  ├─ accuracy_score()                 │
-│  │  └─ feature_importances_            │
-│  │                                       │
-│  ├─ Prediction                           │
-│  │  └─ model.predict_proba()            │
-│  │                                       │
-│  ├─ Odds Fetching                        │
-│  │  ├─ fetch_odds() [API call]         │
-│  │  ├─ normalize_team_code()            │
-│  │  └─ merge with predictions           │
-│  │                                       │
-│  └─ Output                               │
-│     └─ nba_games_predict_*.csv          │
+│  │  ├─ calculate_feature_importance()   │
+│  │  └─ log_training_metrics()           │
+│  ├─ predict_games(date)                  │
+│  │  ├─ load_historical_data()           │
+│  │  ├─ preprocess_data()                │
+│  │  ├─ build_matchups()                 │
+│  │  ├─ train_test_split(80/20)         │
+│  │  ├─ train()                          │
+│  │  ├─ predict_proba()                  │
+│  │  ├─ fetch_odds() [OddsManager]      │
+│  │  └─ save_predictions()               │
+│  └─ evaluate(X_test, y_test)            │
 │                                          │
 └──────────────────────────────────────────┘
 ```
@@ -357,95 +356,104 @@ except Exception as e:
 
 ---
 
-### Script 4: Accuracy Tracking
+### Analysis Layer (`src/core/analyzer.py`)
 
-**Purpose**: Evaluate prediction accuracy
+**Purpose**: Evaluate prediction accuracy and calculate performance metrics
 
 **Architecture**:
 ```python
 ┌──────────────────────────────────────────┐
-│  4_calculate_betting_statistics_2026.py │
+│            analyzer.py                   │
 ├──────────────────────────────────────────┤
 │                                          │
-│  main()                                  │
-│  ├─ Load Predictions                     │
-│  ├─ Load Actual Results                  │
-│  ├─ Merge on (home_team, date)          │
-│  ├─ Calculate Metrics                    │
-│  │  ├─ Overall accuracy                 │
-│  │  ├─ High confidence (prob > 0.60)    │
-│  │  └─ Low confidence (prob < 0.40)     │
-│  └─ Output CSV                           │
+│  BettingPerformanceAnalyzer              │
+│  ├─ __init__(use_db)                    │
+│  ├─ analyze(date)                        │
+│  │  ├─ load_predictions()               │
+│  │  ├─ load_actual_results()            │
+│  │  ├─ merge_data()                     │
+│  │  ├─ calculate_overall_accuracy()     │
+│  │  ├─ calculate_confidence_metrics()   │
+│  │  │  ├─ high_conf (prob > 0.60)      │
+│  │  │  └─ low_conf (prob < 0.40)       │
+│  │  └─ save_statistics()                │
+│  └─ generate_reports()                   │
+│                                          │
+│  HomeWinRateCalculator                   │
+│  ├─ __init__()                           │
+│  ├─ calculate(date, lookback=20)        │
+│  │  ├─ load_recent_games()              │
+│  │  ├─ filter_home_games()              │
+│  │  ├─ calculate_win_rates()            │
+│  │  └─ filter_good_teams(>= 50%)       │
+│  └─ save_win_rates()                     │
 │                                          │
 └──────────────────────────────────────────┘
 ```
 
-**Accuracy Metrics**:
-```python
-# Overall
-accuracy = correct_predictions / total_games
-
-# High Confidence
-high_conf = df[df['prob'] > 0.60]
-high_accuracy = high_conf['correct'].mean()
-
-# Low Confidence
-low_conf = df[df['prob'] < 0.40]
-low_accuracy = low_conf['correct'].mean()
-```
-
 ---
 
-### Script 5: Kelly Criterion & Backtesting
+### Betting Strategy Layer (`src/core/betting.py`)
 
-**Purpose**: Calculate optimal bet sizes and simulate performance
+**Purpose**: Manage odds, calibrate probabilities, calculate optimal stakes, simulate bankroll
 
 **Architecture**:
 ```python
 ┌──────────────────────────────────────────┐
-│  5_kelly_betting_parameters_2026.py     │
+│             betting.py                   │
 ├──────────────────────────────────────────┤
 │                                          │
-│  main()                                  │
-│  ├─ Load Combined Data                   │
-│  │                                       │
-│  ├─ Probability Calibration              │
-│  │  ├─ Platt Scaling                    │
-│  │  │  ├─ LogisticRegression()          │
-│  │  │  └─ fit(raw_prob, actual)         │
-│  │  └─ Isotonic Regression               │
-│  │     ├─ IsotonicRegression()          │
-│  │     └─ fit(raw_prob, actual)         │
-│  │                                       │
-│  ├─ Home Win Rate Calculation            │
-│  │  ├─ Last 20 games per team           │
-│  │  └─ Filter: win_rate >= 50%          │
-│  │                                       │
-│  ├─ Kelly Criterion                      │
-│  │  ├─ For each game:                   │
-│  │  │  ├─ Calculate f* = (bp-q)/b       │
-│  │  │  ├─ Apply fraction (0.5)          │
-│  │  │  ├─ Apply caps (30%, €300)        │
-│  │  │  └─ Filter (odds, prob range)     │
-│  │  └─ Three methods:                   │
-│  │     ├─ Raw probabilities             │
-│  │     ├─ Platt probabilities           │
-│  │     └─ Isotonic probabilities        │
-│  │                                       │
-│  ├─ Backtest Simulation                  │
-│  │  ├─ Start bankroll = €1,000          │
-│  │  ├─ For each bet:                    │
-│  │  │  ├─ Calculate stake               │
-│  │  │  ├─ Resolve outcome               │
-│  │  │  ├─ Update bankroll               │
-│  │  │  └─ Track P&L                     │
-│  │  └─ Generate performance charts      │
-│  │                                       │
-│  └─ Output                               │
-│     ├─ home_win_rates_*.csv             │
-│     ├─ kelly_stakes_*.csv               │
-│     ├─ enriched_*.csv                   │
-│     └─ Charts (PNG)                     │
+│  OddsManager                             │
+│  ├─ __init__(api_key)                   │
+│  ├─ fetch_odds(sport='basketball_nba')  │
+│  │  ├─ call_odds_api()                  │
+│  │  ├─ normalize_team_names()           │
+│  │  ├─ select_best_odds()               │
+│  │  └─ convert_to_decimal()             │
+│  └─ get_preferred_sportsbooks()          │
+│                                          │
+│  ProbabilityCalibrator                   │
+│  ├─ __init__()                           │
+│  ├─ calibrate_platt(raw_probs, actuals) │
+│  │  ├─ LogisticRegression()             │
+│  │  └─ fit_transform()                  │
+│  ├─ calibrate_isotonic(raw_probs, ...)  │
+│  │  ├─ IsotonicRegression()             │
+│  │  └─ fit_transform()                  │
+│  └─ evaluate_calibration()               │
+│                                          │
+│  KellyCriterionCalculator                │
+│  ├─ __init__(fraction=0.5, max_pct=0.3) │
+│  ├─ calculate(date, bankroll=1000)      │
+│  │  ├─ load_enriched_data()             │
+│  │  ├─ apply_probability_calibration()  │
+│  │  ├─ calculate_kelly_stakes()         │
+│  │  │  ├─ f* = (bp - q) / b × fraction │
+│  │  │  ├─ apply_caps(30%, €300)        │
+│  │  │  └─ apply_filters()               │
+│  │  ├─ save_stakes()                    │
+│  │  └─ create_recommendations()          │
+│  └─ kelly_frac(p, odds, fraction)       │
+│                                          │
+│  BankrollSimulator                       │
+│  ├─ __init__(starting_bankroll=1000)    │
+│  ├─ simulate(enriched_df)                │
+│  │  ├─ for each bet:                   │
+│  │  │  ├─ calculate_stake()             │
+│  │  │  ├─ resolve_outcome()             │
+│  │  │  ├─ update_bankroll()             │
+│  │  │  └─ track_pnl()                   │
+│  │  └─ generate_charts()                │
+│  └─ export_results()                     │
+│                                          │
+│  BetRecommendationDisplay                │
+│  ├─ __init__()                           │
+│  ├─ display(date)                        │
+│  │  ├─ load_recommendations()           │
+│  │  ├─ filter_positive_stakes()         │
+│  │  ├─ format_output()                  │
+│  │  └─ print_table()                    │
+│  └─ export_to_file()                     │
 │                                          │
 └──────────────────────────────────────────┘
 ```
@@ -502,41 +510,6 @@ def calculate_stake(prob, odds, bankroll, fraction=0.5):
     return stake
 ```
 
----
-
-### Script 6: Bet Display
-
-**Purpose**: Show today's recommended bets
-
-**Architecture**:
-```python
-┌──────────────────────────────────────────┐
-│  6_proposed_bets_2026.py                │
-├──────────────────────────────────────────┤
-│                                          │
-│  main()                                  │
-│  ├─ Load Enriched Data                   │
-│  ├─ Filter: stake > 0 (any method)      │
-│  ├─ Sort by date                         │
-│  └─ Display                              │
-│     ├─ Team matchup                     │
-│     ├─ Odds                              │
-│     ├─ Probabilities (raw/platt/iso)    │
-│     ├─ Stakes (raw/platt/iso)           │
-│     └─ Expected P&L                      │
-│                                          │
-└──────────────────────────────────────────┘
-```
-
-**Display Format**:
-```
-=== Bets Placed (Raw / Platt / Iso Kelly) ===
-
-Date       | Home  | Away  | Odds | Prob  | Stake | Expected P&L
------------|-------|-------|------|-------|-------|-------------
-2025-10-23 | LAL   | BOS   | -110 | 60%   | €133  | +€12
-2025-10-23 | GSW   | PHX   | +120 | 55%   | €89   | +€8
-```
 
 ---
 
@@ -844,17 +817,20 @@ cp .env.example .env
 
 **Running Locally**:
 ```bash
-cd 2026/src
+# Install CLI
+pip install -e .
 
-# Individual scripts
-python 1_get_data_previous_game_day_2026.py
-python 2_get_data_next_game_day_2026.py
-# ... etc
+# Run complete pipeline
+nba-predict pipeline
 
-# Or in sequence
-for i in {1..6}; do
-    python ${i}_*.py
-done
+# Or run individual commands
+nba-predict collect historical
+nba-predict collect upcoming
+nba-predict predict
+nba-predict analyze stats
+nba-predict analyze kelly
+nba-predict analyze recommend
+nba-predict dashboard
 ```
 
 ---
