@@ -5,7 +5,6 @@
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests: 262 passing](https://img.shields.io/badge/tests-262%20passing-brightgreen.svg)](https://github.com/razi90/Basketball_prediction)
 
 **End-to-End NBA Betting Prediction & Analytics Platform (2025-26 Season)**
 
@@ -15,7 +14,7 @@ Automates **NBA data scraping, machine learning predictions, and betting analyti
 - **Betting Strategy**: Kelly Criterion optimal stake sizing
 - **Error Handling**: Comprehensive logging, retries, and graceful fallbacks
 - **Storage**: Dual-mode (CSV + optional PostgreSQL/Supabase)
-- **Testing**: 262 unit tests with 100% pass rate (pytest)
+- **Testing**: Comprehensive test coverage with pytest
 - **CI/CD**: Automated testing & quality checks via GitHub Actions
 
 ---
@@ -284,9 +283,6 @@ See **[dashboard/README.md](dashboard/README.md)** for complete dashboard docume
 
 ### 🧪 Testing
 
-![Tests Passing](https://img.shields.io/badge/tests-262%20passing-brightgreen.svg)
-![Coverage](https://img.shields.io/badge/coverage-check%20badge%20above-blue.svg)
-
 Run the test suite:
 ```bash
 # All tests
@@ -304,15 +300,15 @@ pytest tests/test_migration_scripts.py -v
 pytest tests/test_cli.py -v
 ```
 
-**Test Coverage** (262 tests, 100% pass rate):
-- ✅ **Betting utilities** (67 tests) - Kelly Criterion, odds conversion, stake sizing, probability calibration
-- ✅ **Team normalization** (83 tests) - All team code mappings and aliases
-- ✅ **Data processing** (24 tests) - Rolling averages, preprocessing, target creation
-- ✅ **Error handling** (38 tests) - Retry logic, validation, context managers, error recovery
-- ✅ **Database integration** (25 tests) - CRUD operations, graceful CSV fallback
-- ✅ **Logger infrastructure** (25 tests) - Logging configuration and output
-- ✅ **CLI commands** (20+ tests) - Command execution and argument parsing
-- ✅ **Migration scripts** (25+ tests) - CSV to PostgreSQL data migration
+**Test Coverage**:
+- ✅ **Betting utilities** - Kelly Criterion, odds conversion, stake sizing, probability calibration
+- ✅ **Team normalization** - All team code mappings and aliases
+- ✅ **Data processing** - Rolling averages, preprocessing, target creation
+- ✅ **Error handling** - Retry logic, validation, context managers, error recovery
+- ✅ **Database integration** - CRUD operations, graceful CSV fallback
+- ✅ **Logger infrastructure** - Logging configuration and output
+- ✅ **CLI commands** - Command execution and argument parsing
+- ✅ **Migration scripts** - CSV to PostgreSQL data migration
 
 **CI/CD**: Automated testing on every push via GitHub Actions
 
@@ -413,15 +409,15 @@ Basketball_prediction/
 │   ├── ARCHITECTURE.md           # Technical design details
 │   ├── DATABASE_SETUP.md         # Database configuration guide
 │   └── ERROR_HANDLING.md         # Error handling infrastructure
-├── tests/                        # 262 unit tests, 9 modules
-│   ├── test_betting_utils.py     # 67 tests
-│   ├── test_team_normalization.py # 83 tests
-│   ├── test_data_processing.py   # 24 tests
-│   ├── test_error_handlers.py    # 38 tests
-│   ├── test_database_integration.py # 25 tests
-│   ├── test_logger.py            # 25 tests
-│   ├── test_cli.py               # 20+ tests
-│   └── test_migration_scripts.py # 25+ tests
+├── tests/                        # Unit tests (pytest)
+│   ├── test_betting_utils.py     # Kelly Criterion, odds conversion
+│   ├── test_team_normalization.py # Team code mappings
+│   ├── test_data_processing.py   # Rolling averages, preprocessing
+│   ├── test_error_handlers.py    # Retry logic, validation
+│   ├── test_database_integration.py # CRUD operations
+│   ├── test_logger.py            # Logging configuration
+│   ├── test_cli.py               # Command execution
+│   └── test_migration_scripts.py # Data migration
 ├── .github/workflows/            # CI/CD automation
 │   ├── daily_prediction_pipeline.yml  # Daily 06:00 UTC execution
 │   └── tests.yml                 # Test automation

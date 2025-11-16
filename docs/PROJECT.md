@@ -45,7 +45,6 @@ The Basketball Prediction System is a sophisticated, automated platform for pred
 
 ### Key Metrics
 
-- **262** passing tests across 9 test modules
 - **~24,773** historical games per season
 - **155+** features per game (basic + advanced stats)
 - **9-game** rolling window for averages
@@ -280,7 +279,7 @@ The Basketball Prediction System is a sophisticated, automated platform for pred
 ├────────────────────────────────────────────────────────────────┤
 │  daily_prediction_pipeline.yml                                │
 │  ├─ Install dependencies                                      │
-│  ├─ Run tests (pytest - 262 tests)                           │
+│  ├─ Run tests (pytest)                                        │
 │  ├─ Execute nba-predict pipeline                              │
 │  ├─ Commit & push results                                     │
 │  └─ Upload artifacts                                          │
@@ -292,14 +291,14 @@ The Basketball Prediction System is a sophisticated, automated platform for pred
 ┌────────────────────────────────────────────────────────────────┐
 │                         TESTS (tests/)                         │
 ├────────────────────────────────────────────────────────────────┤
-│  test_betting_utils.py (67 tests)                             │
-│  test_team_normalization.py (83 tests)                        │
-│  test_data_processing.py (24 tests)                           │
-│  test_error_handlers.py (38 tests)                            │
-│  test_database_integration.py (25 tests)                      │
-│  test_logger.py (25 tests)                                    │
-│  test_cli.py (20+ tests)                                      │
-│  test_migration_scripts.py (25+ tests)                        │
+│  test_betting_utils.py                                        │
+│  test_team_normalization.py                                   │
+│  test_data_processing.py                                      │
+│  test_error_handlers.py                                       │
+│  test_database_integration.py                                 │
+│  test_logger.py                                               │
+│  test_cli.py                                                  │
+│  test_migration_scripts.py                                    │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -837,15 +836,15 @@ Basketball_prediction/
 │   ├── daily_prediction_pipeline.yml  # Daily 06:00 UTC
 │   └── tests.yml                   # Test automation
 │
-├── tests/                          # 262 unit tests, 9 modules
-│   ├── test_betting_utils.py       # 67 tests
-│   ├── test_team_normalization.py  # 83 tests
-│   ├── test_data_processing.py     # 24 tests
-│   ├── test_error_handlers.py      # 38 tests
-│   ├── test_database_integration.py # 25 tests
-│   ├── test_logger.py              # 25 tests
-│   ├── test_cli.py                 # 20+ tests
-│   └── test_migration_scripts.py   # 25+ tests
+├── tests/                          # Unit tests (pytest)
+│   ├── test_betting_utils.py       # Kelly Criterion, odds conversion
+│   ├── test_team_normalization.py  # Team code mappings
+│   ├── test_data_processing.py     # Rolling averages, preprocessing
+│   ├── test_error_handlers.py      # Retry logic, validation
+│   ├── test_database_integration.py # CRUD operations
+│   ├── test_logger.py              # Logging configuration
+│   ├── test_cli.py                 # Command execution
+│   └── test_migration_scripts.py   # Data migration
 │
 ├── docs/                           # Documentation
 │   ├── PROJECT.md                  # This file
