@@ -76,9 +76,9 @@ def prepare_predictions_for_db(df: pd.DataFrame, source_file: str) -> pd.DataFra
 
     # Convert date column
     if 'date' in df_clean.columns:
-        df_clean['date'] = pd.to_datetime(df_clean['date']).dt.date
+        df_clean['date'] = pd.to_datetime(df_clean['date'], format='mixed').dt.date
     elif 'game_date' in df_clean.columns:
-        df_clean['date'] = pd.to_datetime(df_clean['game_date']).dt.date
+        df_clean['date'] = pd.to_datetime(df_clean['game_date'], format='mixed').dt.date
         df_clean.drop('game_date', axis=1, inplace=True)
 
     # Extract prediction date from filename (e.g., predictions_2025-10-22.csv)

@@ -76,7 +76,7 @@ def prepare_enriched_for_db(df: pd.DataFrame) -> pd.DataFrame:
     # Convert date columns
     for date_col in ['date', 'game_date', 'prediction_date']:
         if date_col in df_clean.columns:
-            df_clean[date_col] = pd.to_datetime(df_clean[date_col]).dt.date
+            df_clean[date_col] = pd.to_datetime(df_clean[date_col], format='mixed').dt.date
 
     # Kelly stake columns
     stake_cols = ['stake_raw', 'stake_platt', 'stake_iso']
@@ -151,8 +151,8 @@ def match_predictions_to_ids(
     merge_cols = ['home_team', 'away_team', 'date']
 
     # Ensure date columns are same type
-    enriched_df['date'] = pd.to_datetime(enriched_df['date']).dt.date
-    existing_preds['date'] = pd.to_datetime(existing_preds['date']).dt.date
+    enriched_df['date'] = pd.to_datetime(enriched_df['date'], format='mixed').dt.date
+    existing_preds['date'] = pd.to_datetime(existing_preds['date'], format='mixed').dt.date
 
     # Merge to get prediction IDs
     matched = enriched_df.merge(

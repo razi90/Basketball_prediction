@@ -80,7 +80,7 @@ def prepare_dataframe_for_db(df: pd.DataFrame) -> pd.DataFrame:
 
     # Convert date column to proper datetime
     if 'date' in df_clean.columns:
-        df_clean['date'] = pd.to_datetime(df_clean['date']).dt.date
+        df_clean['date'] = pd.to_datetime(df_clean['date'], format='mixed').dt.date
 
     # Convert boolean columns
     if 'won' in df_clean.columns:
