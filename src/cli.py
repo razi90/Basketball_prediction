@@ -289,18 +289,15 @@ def main():
     try:
         click.echo("Initializing database connection...")
         initialize_database()
-
-        if db_config.enabled:
-            click.echo("✓ Database initialized successfully")
-        else:
-            click.echo("Database disabled - using CSV mode")
+        click.echo("✓ Database initialized successfully")
 
         # Register cleanup handler to close database connections on exit
         atexit.register(close_database)
     except Exception as e:
-        # Log error but continue - app can fall back to CSV mode
-        click.echo(f"⚠️  Database initialization failed: {e}", err=True)
-        click.echo("Continuing in CSV-only mode...", err=True)
+        # Log error and fail - database is required
+        click.echo(f"❌ Database initialization failed: {e}", err=True)
+        click.echo("Database is required for operation. Please configure database connection.", err=True)
+        raise
 
     cli()
 

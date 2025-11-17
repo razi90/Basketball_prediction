@@ -689,15 +689,11 @@ class HomeWinRateCalculator:
             win_rates_df: DataFrame with home win rates
 
         Returns:
-            Number of rows saved (0 if database not enabled)
+            Number of rows saved
 
         Raises:
             Exception: If database save fails (logged but not raised)
         """
-        if not db_config.enabled:
-            logger.debug("Database not enabled, skipping database save")
-            return 0
-
         with ErrorContext("saving home win rates to database"):
             try:
                 db_ops = DatabaseOperations()
