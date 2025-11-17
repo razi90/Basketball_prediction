@@ -38,6 +38,10 @@ logger = get_logger(__name__)
 def find_prediction_files(pred_dir: str, latest_only: bool = False) -> List[str]:
     """Find all predictions_*.csv files.
 
+    Searches for:
+    - predictions_*.csv (standard format)
+    - combined_nba_predictions_acc_*.csv (legacy format)
+
     Args:
         pred_dir: Directory containing prediction CSV files
         latest_only: If True, return only the most recent file
@@ -45,11 +49,18 @@ def find_prediction_files(pred_dir: str, latest_only: bool = False) -> List[str]
     Returns:
         List of CSV file paths, sorted by date
     """
-    pattern = os.path.join(pred_dir, "predictions_*.csv")
-    files = glob.glob(pattern)
+    patterns = [
+        os.path.join(pred_dir, "predictions_*.csv"),
+        os.path.join(pred_dir, "combined_nba_predictions_acc_*.csv"),
+    ]
+
+    files = []
+    for pattern in patterns:
+        files.extend(glob.glob(pattern))
 
     if not files:
-        logger.warning(f"No prediction files found matching: {pattern}")
+        logger.warning(f"No prediction files found in: {pred_dir}")
+        logger.warning(f"Searched for: predictions_*.csv and combined_nba_predictions_acc_*.csv")
         return []
 
     files.sort()
@@ -74,6 +85,13 @@ def prepare_predictions_for_db(df: pd.DataFrame, source_file: str) -> pd.DataFra
     """
     df_clean = df.copy()
 
+    # Rename columns with spaces to underscores
+    column_renames = {
+        'odds 1': 'odds_1',
+        'odds 2': 'odds_2',
+    }
+    df_clean.rename(columns=column_renames, inplace=True)
+
     # Convert date column
     if 'date' in df_clean.columns:
         df_clean['date'] = pd.to_datetime(df_clean['date']).dt.date
@@ -81,12 +99,20 @@ def prepare_predictions_for_db(df: pd.DataFrame, source_file: str) -> pd.DataFra
         df_clean['date'] = pd.to_datetime(df_clean['game_date']).dt.date
         df_clean.drop('game_date', axis=1, inplace=True)
 
-    # Extract prediction date from filename (e.g., predictions_2025-10-22.csv)
+    # Extract prediction date from filename
+    # Handles both: predictions_2025-10-22.csv and combined_nba_predictions_acc_2025-10-22.csv
     try:
         basename = os.path.basename(source_file)
-        date_str = basename.replace('predictions_', '').replace('.csv', '')
-        prediction_date = pd.to_datetime(date_str).date()
-        df_clean['prediction_date'] = prediction_date
+        # Extract date pattern YYYY-MM-DD from filename
+        import re
+        date_match = re.search(r'(\d{4}-\d{2}-\d{2})', basename)
+        if date_match:
+            date_str = date_match.group(1)
+            prediction_date = pd.to_datetime(date_str).date()
+            df_clean['prediction_date'] = prediction_date
+        else:
+            logger.warning(f"No date found in filename {source_file}, using current date")
+            df_clean['prediction_date'] = datetime.now().date()
     except Exception as e:
         logger.warning(f"Could not extract date from filename {source_file}: {e}")
         df_clean['prediction_date'] = datetime.now().date()
