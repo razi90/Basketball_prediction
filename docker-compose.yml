@@ -33,9 +33,24 @@ services:
     env_file:
       - .env
     environment:
+      # Database connection
       - DATABASE_URL=postgresql://nba_user:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/nba_predictions
-      - USE_DATABASE=${USE_DATABASE:-true}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=nba_predictions
+      - DB_USER=nba_user
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-changeme123}
+
+      # Database initialization
+      - SKIP_DB_INIT=${SKIP_DB_INIT:-false}  # Set to 'true' to skip auto-initialization
+
+      # Application settings
+      - PYTHONUNBUFFERED=1
     volumes:
+      # Mount CSV data directories for initial population
+      - ./output/Gathering_Data:/app/output/Gathering_Data:ro
+
+      # Mount output directories
       - ./2026/data:/app/2026/data
       - ./2026/output:/app/2026/output
       - ./logs:/app/logs
@@ -56,12 +71,26 @@ services:
     container_name: nba_dashboard
     env_file:
       - .env
+    environment:
+      # Database connection
+      - DATABASE_URL=postgresql://nba_user:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/nba_predictions
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=nba_predictions
+      - DB_USER=nba_user
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-changeme123}
+
+      # Application settings
+      - PYTHONUNBUFFERED=1
     ports:
       - "8501:8501"
     volumes:
       - ./2026/data:/app/2026/data
       - ./2026/output:/app/2026/output
       - ./dashboard:/app/dashboard
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - nba_network
     restart: unless-stopped

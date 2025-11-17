@@ -79,27 +79,17 @@ def run_kelly() -> bool:
         analyzer = BettingPerformanceAnalyzer(season=CURRENT_SEASON)
 
         try:
-            # Try to load combined statistics file first
-            stats_file = analyzer.find_recent_statistics_file()
-            if stats_file:
-                combined_df = analyzer.load_actual_results(stats_file)
-                logger.info(f"Loaded combined statistics from {stats_file}")
-            else:
-                # Fallback to prediction file
-                pred_file = analyzer.find_recent_prediction_file()
-                if not pred_file:
-                    logger.error("No prediction or statistics files found")
-                    return False
-                combined_df = analyzer.load_predictions(pred_file)
-                logger.info(f"Loaded predictions from {pred_file}")
+            # Load from database
+            combined_df = analyzer.load_actual_results()
+            logger.info(f"Loaded game statistics from database")
         except Exception as e:
-            logger.error(f"Could not load data: {e}")
+            logger.error(f"Could not load data from database: {e}")
             return False
 
         # Step 2: Calculate home win rates
         logger.info("🏠 Calculating home win rates...")
-        win_rates_df, good_teams_df, rates_path = calculator.compute_and_save(combined_df)
-        logger.info(f"Home win rates saved to {rates_path}")
+        win_rates_df, good_teams_df, _ = calculator.compute_and_save(combined_df)
+        logger.info(f"Home win rates calculated and saved to database")
 
         # Step 3: Calibrate and simulate (if we have historical data)
         if 'result' in combined_df.columns:
@@ -142,17 +132,13 @@ def run_kelly() -> bool:
                 bankroll=1000.0,
             )
 
-            # Save enriched predictions
-            from src.core.predictor import get_directory_paths
-            dirs = get_directory_paths()
-            prediction_dir = dirs["prediction_dir"]
-            os.makedirs(prediction_dir, exist_ok=True)
+            # Save enriched predictions to database
+            from src.utils.db_utils import DatabaseOperations
+            db_ops = DatabaseOperations()
+            rows_saved = db_ops.save_enriched_predictions(todays_games_with_kelly)
+            logger.info(f"Enriched predictions saved to database: {rows_saved} rows")
 
-            enriched_path = prediction_dir / f"combined_nba_predictions_enriched_{today_str}.csv"
-            todays_games_with_kelly.to_csv(enriched_path, index=False)
-            logger.info(f"Enriched predictions saved to {enriched_path}")
-
-            # Filter and save recommended bets
+            # Filter recommended bets
             value_bets = kelly_calc.filter_value_bets(
                 df=todays_games_with_kelly,
                 odds_range=(1.18, 3.00),
@@ -160,9 +146,10 @@ def run_kelly() -> bool:
             )
 
             if not value_bets.empty:
-                stakes_path = prediction_dir / f"kelly_stakes_{today_str}.csv"
-                value_bets.to_csv(stakes_path, index=False)
-                logger.info(f"✅ {len(value_bets)} recommended bets saved to {stakes_path}")
+                logger.info(f"✅ {len(value_bets)} recommended bets identified")
+                # Display top bets
+                for _, bet in value_bets.head(5).iterrows():
+                    logger.info(f"  {bet.get('home_team', 'N/A')} vs {bet.get('away_team', 'N/A')}")
             else:
                 logger.info("No value bets found for today")
         else:

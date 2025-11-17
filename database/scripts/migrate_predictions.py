@@ -45,7 +45,7 @@ def find_prediction_files(pred_dir: str, latest_only: bool = False) -> List[str]
     Returns:
         List of CSV file paths, sorted by date
     """
-    pattern = os.path.join(pred_dir, "predictions_*.csv")
+    pattern = os.path.join(pred_dir, "combined_nba_predictions_*.csv")
     files = glob.glob(pattern)
 
     if not files:
@@ -76,9 +76,9 @@ def prepare_predictions_for_db(df: pd.DataFrame, source_file: str) -> pd.DataFra
 
     # Convert date column
     if 'date' in df_clean.columns:
-        df_clean['date'] = pd.to_datetime(df_clean['date']).dt.date
+        df_clean['date'] = pd.to_datetime(df_clean['date'], format='mixed').dt.date
     elif 'game_date' in df_clean.columns:
-        df_clean['date'] = pd.to_datetime(df_clean['game_date']).dt.date
+        df_clean['date'] = pd.to_datetime(df_clean['game_date'], format='mixed').dt.date
         df_clean.drop('game_date', axis=1, inplace=True)
 
     # Extract prediction date from filename (e.g., predictions_2025-10-22.csv)
@@ -191,12 +191,6 @@ def main():
         help="Migrate only the most recent file"
     )
     args = parser.parse_args()
-
-    # Check database enabled
-    if not db_config.enabled:
-        logger.error("Database not enabled. Set USE_DATABASE=true in .env")
-        logger.error("See docs/DATABASE_SETUP.md for setup instructions")
-        return 1
 
     # Get paths
     paths = get_directory_paths()

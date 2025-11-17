@@ -147,7 +147,7 @@ class HistoricalGameCollector:
         self.season = season
         self.standings_dir = standings_dir or f"data/{season}_standings"
         self.scores_dir = scores_dir or f"data/{season}_scores"
-        self.db_ops = DatabaseOperations() if db_config.enabled else None
+        self.db_ops = DatabaseOperations()
 
         # Ensure directories exist
         os.makedirs(self.standings_dir, exist_ok=True)
@@ -572,10 +572,6 @@ class HistoricalGameCollector:
             >>> rows_saved = collector.save_to_database(games_df)
             >>> print(f"Saved {rows_saved} rows to database")
         """
-        if not db_config.enabled:
-            logger.info("Database not enabled, skipping save")
-            return 0
-
         if df.empty:
             logger.warning("Empty DataFrame, nothing to save")
             return 0
@@ -639,7 +635,7 @@ class UpcomingGameCollector:
         # Determine season (env var → explicit param → CURRENT_SEASON)
         self.season = self.determine_season_year(season or CURRENT_SEASON)
         self.standings_dir = standings_dir or f"data/{self.season}_standings"
-        self.db_ops = DatabaseOperations() if db_config.enabled else None
+        self.db_ops = DatabaseOperations()
 
         # Ensure directory exists
         os.makedirs(self.standings_dir, exist_ok=True)
@@ -997,10 +993,6 @@ class UpcomingGameCollector:
             >>> rows_saved = collector.save_to_database(games_df)
             >>> print(f"Saved {rows_saved} rows to database")
         """
-        if not db_config.enabled:
-            logger.info("Database not enabled, skipping save")
-            return 0
-
         if df.empty:
             logger.warning("Empty DataFrame, nothing to save")
             return 0

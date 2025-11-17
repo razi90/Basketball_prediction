@@ -74,6 +74,8 @@ def get_directory_paths() -> Dict[str, str]:
         "SCORES_DIR": os.path.join(data_dir, "data", f"{CURRENT_SEASON}_scores"),
         "NEXT_GAME_DIR": os.path.join(data_dir, "Next_Game"),
         "PREDICTION_DIR": os.path.join(base_dir, "output", "LightGBM"),
+        "PRED_DIR": os.path.join(base_dir, "output", "LightGBM", "predictions"),
+        "ENRICHED_DIR": os.path.join(base_dir, "output", "LightGBM", "enriched"),
     }
 
     for p in paths.values():
@@ -128,9 +130,19 @@ def get_team_codes() -> Dict[str, str]:
 
 def get_latest_file(folder: str, prefix: str, ext: str) -> Optional[str]:
     """
+    DEPRECATED: CSV processing has been removed in favor of database operations.
+
     Return the most recently modified file in `folder`
     that matches <prefix>*<ext>, or None.
+
+    This function is kept for backward compatibility only.
     """
+    import warnings
+    warnings.warn(
+        "get_latest_file() is deprecated. Use database operations instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     files = glob.glob(os.path.join(folder, f"{prefix}*{ext}"))
     return max(files, key=os.path.getctime) if files else None
 
@@ -139,12 +151,22 @@ def find_file_in_date_range(
     directory: str, filename_pattern: str, max_days_back: int = 120
 ) -> Tuple[Optional[str], Optional[str]]:
     """
+    DEPRECATED: CSV processing has been removed in favor of database operations.
+
     filename_pattern must contain {} where the date (YYYY-MM-DD) goes.
 
     Tries today, yesterday, ... up to max_days_back, and returns:
         (file_path_found, "YYYY-MM-DD_when_found")
     If nothing found: (None, None)
+
+    This function is kept for backward compatibility only.
     """
+    import warnings
+    warnings.warn(
+        "find_file_in_date_range() is deprecated. Use database operations instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     for days_back in range(max_days_back + 1):
         date_to_check = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
         file_path = os.path.join(directory, filename_pattern.format(date_to_check))

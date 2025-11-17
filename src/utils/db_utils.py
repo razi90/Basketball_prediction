@@ -4,7 +4,7 @@
 Database utilities for Basketball Prediction project.
 
 Provides connection management and CRUD operations for Supabase/PostgreSQL.
-Falls back to CSV operations if database is not configured.
+Database is required - no CSV fallback.
 """
 
 import os
@@ -32,26 +32,24 @@ logger = get_logger(__name__)
 
 
 class DatabaseConfig:
-    """Database configuration from environment variables."""
+    """Database configuration from environment variables. Database is required."""
 
     def __init__(self):
-        self.enabled = os.getenv("USE_DATABASE", "false").lower() == "true"
+        # Database is always enabled - no switch needed
+        # Supabase connection string format:
+        # postgresql://[user]:[password]@[host]:[port]/[database]
+        self.connection_string = os.getenv("DATABASE_URL")
 
-        if self.enabled:
-            # Supabase connection string format:
-            # postgresql://[user]:[password]@[host]:[port]/[database]
-            self.connection_string = os.getenv("DATABASE_URL")
+        # Or individual components
+        self.host = os.getenv("DB_HOST", "localhost")
+        self.port = int(os.getenv("DB_PORT", "5432"))
+        self.database = os.getenv("DB_NAME", "basketball_predictions")
+        self.user = os.getenv("DB_USER", "postgres")
+        self.password = os.getenv("DB_PASSWORD", "")
 
-            # Or individual components
-            self.host = os.getenv("DB_HOST", "localhost")
-            self.port = int(os.getenv("DB_PORT", "5432"))
-            self.database = os.getenv("DB_NAME", "basketball_predictions")
-            self.user = os.getenv("DB_USER", "postgres")
-            self.password = os.getenv("DB_PASSWORD", "")
-
-            # Connection pool settings
-            self.min_connections = int(os.getenv("DB_MIN_CONNECTIONS", "1"))
-            self.max_connections = int(os.getenv("DB_MAX_CONNECTIONS", "10"))
+        # Connection pool settings
+        self.min_connections = int(os.getenv("DB_MIN_CONNECTIONS", "1"))
+        self.max_connections = int(os.getenv("DB_MAX_CONNECTIONS", "10"))
 
     def get_connection_params(self) -> Dict[str, Any]:
         """Get connection parameters as dictionary."""
@@ -68,9 +66,6 @@ class DatabaseConfig:
 
     def validate(self):
         """Validate database configuration."""
-        if not self.enabled:
-            return
-
         if not self.connection_string:
             if not all([self.host, self.database, self.user, self.password]):
                 raise ConfigurationError(
@@ -99,11 +94,7 @@ class DatabasePool:
         return cls._instance
 
     def initialize(self):
-        """Initialize connection pool."""
-        if not db_config.enabled:
-            logger.info("Database disabled, using CSV fallback mode")
-            return
-
+        """Initialize connection pool. Database is required."""
         if self._pool is not None:
             logger.warning("Connection pool already initialized")
             return
@@ -136,8 +127,10 @@ class DatabasePool:
     @contextmanager
     def get_connection(self):
         """Get a connection from the pool (context manager)."""
-        if not db_config.enabled or self._pool is None:
-            raise ConfigurationError("Database not initialized")
+        if self._pool is None:
+            raise ConfigurationError(
+                "Database not initialized. Call db_pool.initialize() first."
+            )
 
         conn = self._pool.getconn()
         try:
@@ -178,8 +171,8 @@ class DatabaseOperations:
 
     @staticmethod
     def is_enabled() -> bool:
-        """Check if database is enabled."""
-        return db_config.enabled
+        """Check if database is enabled. Always returns True (database is required)."""
+        return True
 
     # ─────────────────────────────────────────────────────
     # GAME STATISTICS
@@ -614,10 +607,7 @@ db = DatabaseOperations()
 
 def initialize_database():
     """Initialize database connection pool."""
-    if db_config.enabled:
-        db_pool.initialize()
-    else:
-        logger.info("Database disabled - using CSV storage")
+    db_pool.initialize()
 
 
 def close_database():
@@ -634,14 +624,13 @@ if __name__ == "__main__":
     try:
         initialize_database()
 
-        if db_config.enabled:
-            # Test query
-            result = db.execute_query("SELECT COUNT(*) as count FROM teams")
-            print(f"Teams in database: {result[0]['count']}")
+        # Test query
+        result = db.execute_query("SELECT COUNT(*) as count FROM teams")
+        print(f"Teams in database: {result[0]['count']}")
 
-            # Get betting performance
-            performance = db.get_betting_performance()
-            print(f"Betting performance: {performance}")
+        # Get betting performance
+        performance = db.get_betting_performance()
+        print(f"Betting performance: {performance}")
 
     except Exception as e:
         logger.error(f"Database test failed: {e}")
