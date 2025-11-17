@@ -388,6 +388,19 @@ class DatabaseOperations:
                 with conn.cursor() as cur:
                     for _, row in df_copy.iterrows():
                         try:
+                            # Extract only the columns we need to avoid parameter mixing issues
+                            params = {
+                                "home_team": row["home_team"],
+                                "away_team": row["away_team"],
+                                "date": row["date"],
+                                "home_team_prob": float(row["home_team_prob"]),
+                                "odds_1": float(row["odds_1"]) if pd.notna(row["odds_1"]) else None,
+                                "odds_2": float(row["odds_2"]) if pd.notna(row["odds_2"]) else None,
+                                "result": row["result"] if pd.notna(row["result"]) else None,
+                                "model_version": model_version,
+                                "prediction_date": prediction_date,
+                            }
+
                             cur.execute(
                                 """
                                 INSERT INTO predictions (
@@ -409,11 +422,7 @@ class DatabaseOperations:
                                     model_version = EXCLUDED.model_version,
                                     updated_at = NOW()
                             """,
-                                {
-                                    **row.to_dict(),
-                                    "model_version": model_version,
-                                    "prediction_date": prediction_date,
-                                },
+                                params,
                             )
                             inserted += 1
                         except Exception as e:
