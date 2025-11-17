@@ -628,9 +628,9 @@ if __name__ == "__main__":
         result = db.execute_query("SELECT COUNT(*) as count FROM teams")
         print(f"Teams in database: {result[0]['count']}")
 
-            # Get betting performance
-            performance = db.get_betting_performance()
-            print(f"Betting performance: {performance}")
+        # Get betting performance
+        performance = db.get_betting_performance()
+        print(f"Betting performance: {performance}")
 
     except Exception as e:
         logger.error(f"Database test failed: {e}")
