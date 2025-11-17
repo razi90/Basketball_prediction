@@ -32,7 +32,7 @@ if [ "${SKIP_DB_INIT}" != "true" ]; then
     echo "🔍 Checking if database needs initialization..."
 
     # Run database initialization script
-    python /app/database/scripts/init_database.py
+    python /app/database/scripts/init_database.py --force
 
     if [ $? -eq 0 ]; then
         echo "✅ Database initialization complete"

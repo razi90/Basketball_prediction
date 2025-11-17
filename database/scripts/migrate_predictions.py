@@ -45,7 +45,7 @@ def find_prediction_files(pred_dir: str, latest_only: bool = False) -> List[str]
     Returns:
         List of CSV file paths, sorted by date
     """
-    pattern = os.path.join(pred_dir, "predictions_*.csv")
+    pattern = os.path.join(pred_dir, "combined_nba_predictions_*.csv")
     files = glob.glob(pattern)
 
     if not files:

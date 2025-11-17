@@ -141,7 +141,7 @@ def initialize_database(csv_dir: Optional[str] = None, force: bool = False, dry_
         migrations = [
             "migrate_game_statistics.py",
             "migrate_predictions.py",
-            "migrate_enriched_predictions.py",
+            # "migrate_enriched_predictions.py",
         ]
 
         logger.info(f"\n📦 Running {len(migrations)} migration scripts...")
