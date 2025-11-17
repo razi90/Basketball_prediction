@@ -267,12 +267,6 @@ def main():
     )
     args = parser.parse_args()
 
-    # Check database enabled
-    if not db_config.enabled:
-        logger.error("Database not enabled. Set USE_DATABASE=true in .env")
-        logger.error("See docs/DATABASE_SETUP.md for setup")
-        return 1
-
     # Get paths
     paths = get_directory_paths()
     enrich_dir = paths['ENRICHED_DIR']

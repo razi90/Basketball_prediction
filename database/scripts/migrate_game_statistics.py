@@ -187,12 +187,6 @@ def main():
     )
     args = parser.parse_args()
 
-    # Check if database is enabled
-    if not db_config.enabled:
-        logger.error("Database is not enabled. Set USE_DATABASE=true in .env")
-        logger.error("See docs/DATABASE_SETUP.md for configuration instructions")
-        return 1
-
     # Get directory paths
     paths = get_directory_paths()
     stat_dir = paths['STAT_DIR']

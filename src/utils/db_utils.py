@@ -171,8 +171,8 @@ class DatabaseOperations:
 
     @staticmethod
     def is_enabled() -> bool:
-        """Check if database is enabled."""
-        return db_config.enabled
+        """Check if database is enabled. Always returns True (database is required)."""
+        return True
 
     # ─────────────────────────────────────────────────────
     # GAME STATISTICS
@@ -607,10 +607,7 @@ db = DatabaseOperations()
 
 def initialize_database():
     """Initialize database connection pool."""
-    if db_config.enabled:
-        db_pool.initialize()
-    else:
-        logger.info("Database disabled - using CSV storage")
+    db_pool.initialize()
 
 
 def close_database():
@@ -627,10 +624,9 @@ if __name__ == "__main__":
     try:
         initialize_database()
 
-        if db_config.enabled:
-            # Test query
-            result = db.execute_query("SELECT COUNT(*) as count FROM teams")
-            print(f"Teams in database: {result[0]['count']}")
+        # Test query
+        result = db.execute_query("SELECT COUNT(*) as count FROM teams")
+        print(f"Teams in database: {result[0]['count']}")
 
             # Get betting performance
             performance = db.get_betting_performance()
