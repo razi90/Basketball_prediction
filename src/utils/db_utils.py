@@ -378,9 +378,15 @@ class DatabaseOperations:
             inserted = 0
             prediction_date = datetime.now().date()
 
+            # Ensure required columns exist (add missing ones as None)
+            df_copy = df.copy()
+            for col in ['odds_1', 'odds_2', 'result']:
+                if col not in df_copy.columns:
+                    df_copy[col] = None
+
             with self.pool.get_connection() as conn:
                 with conn.cursor() as cur:
-                    for _, row in df.iterrows():
+                    for _, row in df_copy.iterrows():
                         try:
                             cur.execute(
                                 """
@@ -392,7 +398,7 @@ class DatabaseOperations:
                                 VALUES (
                                     %(home_team)s, %(away_team)s, %(date)s,
                                     %(home_team_prob)s, %(odds_1)s, %(odds_2)s,
-                                    %(result)s, %s, %s
+                                    %(result)s, %(model_version)s, %(prediction_date)s
                                 )
                                 ON CONFLICT (home_team, away_team, date, prediction_date)
                                 DO UPDATE SET

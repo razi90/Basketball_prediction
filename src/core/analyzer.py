@@ -213,7 +213,7 @@ class BettingPerformanceAnalyzer:
                 return predict_df
 
             # Normalize decimal columns in odds (convert comma to period)
-            for col in ["odds 1", "odds 2"]:
+            for col in ["odds_1", "odds_2"]:
                 if col in predict_df.columns:
                     predict_df[col] = (
                         predict_df[col].astype(str).str.replace(",", ".").astype(float)
