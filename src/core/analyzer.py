@@ -190,24 +190,27 @@ class BettingPerformanceAnalyzer:
             logger.warning(f"No statistics file found in the last {self.max_days_back} days")
             return None, None
 
-    def load_predictions(self, file_path: str) -> pd.DataFrame:
+    def load_predictions(self, limit: Optional[int] = None) -> pd.DataFrame:
         """
-        Load prediction file and normalize decimal columns.
+        Load predictions from database.
 
         Args:
-            file_path: Path to the prediction CSV file
+            limit: Maximum number of predictions to load (None = all)
 
         Returns:
             DataFrame with predictions, with normalized odds columns
 
         Raises:
-            DataValidationError: If file cannot be loaded or is invalid
+            DataValidationError: If data cannot be loaded or is invalid
+            ConfigurationError: If database is not configured
         """
-        with ErrorContext("loading predictions"):
-            validate_file_exists(file_path, "prediction file")
+        with ErrorContext("loading predictions from database"):
+            db_ops = DatabaseOperations()
+            predict_df = db_ops.get_latest_predictions(limit=limit or 100)
 
-            # Read prediction file
-            predict_df = pd.read_csv(file_path)
+            if predict_df.empty:
+                logger.warning("No predictions found in database")
+                return predict_df
 
             # Normalize decimal columns in odds (convert comma to period)
             for col in ["odds 1", "odds 2"]:
@@ -220,36 +223,41 @@ class BettingPerformanceAnalyzer:
             required_cols = ["date", "home_team", "away_team", "home_team_prob"]
             validate_dataframe(predict_df, required_columns=required_cols)
 
-            log_dataframe_info(predict_df, "Loaded predictions")
+            log_dataframe_info(predict_df, "Loaded predictions from database")
             return predict_df
 
-    def load_actual_results(self, file_path: str) -> pd.DataFrame:
+    def load_actual_results(self, season: Optional[int] = None) -> pd.DataFrame:
         """
-        Load actual game results file and filter to current season.
+        Load actual game results from database and filter to specified season.
 
         Args:
-            file_path: Path to the statistics CSV file
+            season: NBA season year (None = use instance season)
 
         Returns:
             DataFrame with actual game results for the current season
 
         Raises:
-            DataValidationError: If file cannot be loaded or is invalid
+            DataValidationError: If data cannot be loaded or is invalid
+            ConfigurationError: If database is not configured
         """
-        with ErrorContext("loading actual results"):
-            validate_file_exists(file_path, "statistics file")
+        with ErrorContext("loading actual results from database"):
+            season = season or self.season
+            db_ops = DatabaseOperations()
+            games_df = db_ops.get_latest_game_statistics(limit=None)
 
-            # Read the games data
-            games_df = pd.read_csv(file_path)
+            if games_df.empty:
+                logger.warning("No game statistics found in database")
+                return games_df
 
             # Filter to current season only
-            games_df = games_df[games_df["season"] == self.season].copy()
+            if "season" in games_df.columns:
+                games_df = games_df[games_df["season"] == season].copy()
 
             # Validate required columns
             required_cols = ["date", "team", "won"]
             validate_dataframe(games_df, required_columns=required_cols)
 
-            log_dataframe_info(games_df, f"Loaded results for season {self.season}")
+            log_dataframe_info(games_df, f"Loaded results for season {season} from database")
             return games_df
 
     def merge_predictions_with_results(
@@ -482,82 +490,55 @@ class BettingPerformanceAnalyzer:
             return report
 
     def process_and_update_statistics(
-        self, prediction_date: Optional[str] = None
+        self, prediction_limit: Optional[int] = None
     ) -> Optional[pd.DataFrame]:
         """
-        Complete workflow: find files, load data, merge, calculate accuracy, and save.
+        Complete workflow: load data from database, merge, calculate accuracy.
 
         This is the main method that orchestrates the entire betting statistics
-        calculation workflow.
+        calculation workflow using database operations.
 
         Args:
-            prediction_date: Optional date string for the prediction file.
-                           If None, finds the most recent file.
+            prediction_limit: Maximum number of predictions to load (None = all)
 
         Returns:
             DataFrame with updated statistics, or None if processing failed
 
         Raises:
             DataValidationError: If any step in the workflow fails
+            ConfigurationError: If database is not configured
         """
-        with ErrorContext("processing betting statistics workflow"):
-            # Step 1: Find prediction file
-            if prediction_date:
-                predict_file = os.path.join(
-                    self.prediction_dir, f"nba_games_predict_{prediction_date}.csv"
-                )
-                last_prediction = prediction_date
-            else:
-                predict_file, last_prediction = self.find_recent_prediction_file()
+        with ErrorContext("processing betting statistics workflow from database"):
+            # Step 1: Load predictions from database
+            predict_df = self.load_predictions(limit=prediction_limit)
 
-            if not predict_file:
-                logger.error("No recent prediction file found.")
+            if predict_df.empty:
+                logger.error("No predictions found in database.")
                 return None
 
-            # Step 2: Load predictions
-            predict_df = self.load_predictions(predict_file)
-
-            # Step 3: Create or load combined predictions file
-            today_str = get_current_date()[2]  # YYYY-MM-DD format
-            combined_file_path = os.path.join(
-                self.prediction_dir, f"combined_nba_predictions_acc_{last_prediction}.csv"
-            )
-
-            try:
-                combined_df = pd.read_csv(combined_file_path)
-                logger.info(f"Loaded existing combined file: {combined_file_path}")
-            except FileNotFoundError:
-                combined_df = pd.DataFrame()
-                logger.info("No existing combined file found, creating new one")
-
-            # Step 4: Append predictions and add accuracy placeholder
+            # Step 2: Add accuracy placeholder
             predict_df["accuracy"] = np.nan
-            combined_df = pd.concat([combined_df, predict_df], ignore_index=True)
-            combined_df = combined_df.sort_values(by="date", ascending=False)
+            predict_df = predict_df.sort_values(by="date", ascending=False)
 
             logger.info(
-                f"Combined predictions (latest 10 rows):\n{combined_df.head(10).to_string(index=False)}"
+                f"Loaded predictions (latest 10 rows):\n{predict_df.head(10).to_string(index=False)}"
             )
 
-            # Step 5: Find and load actual results
-            stats_file, stats_date = self.find_recent_statistics_file()
-            if not stats_file:
-                logger.error("No recent statistics file found.")
+            # Step 3: Load actual results from database
+            actual_results = self.load_actual_results()
+
+            if actual_results.empty:
+                logger.error("No game statistics found in database.")
                 return None
 
-            actual_results = self.load_actual_results(stats_file)
+            # Step 4: Merge predictions with results
+            merged_df = self.merge_predictions_with_results(predict_df, actual_results)
 
-            # Step 6: Merge predictions with results
-            merged_df = self.merge_predictions_with_results(combined_df, actual_results)
-
-            # Step 7: Calculate accuracy
+            # Step 5: Calculate accuracy
             final_df = self.calculate_accuracy(merged_df)
 
-            # Step 8: Generate and save performance report
-            save_path = os.path.join(
-                self.prediction_dir, f"combined_nba_predictions_acc_{today_str}.csv"
-            )
-            self.generate_performance_report(final_df, save_path=save_path)
+            # Step 6: Generate performance report (no CSV save)
+            self.generate_performance_report(final_df, save_path=None)
 
             return final_df
 
@@ -708,15 +689,11 @@ class HomeWinRateCalculator:
             win_rates_df: DataFrame with home win rates
 
         Returns:
-            Number of rows saved (0 if database not enabled)
+            Number of rows saved
 
         Raises:
             Exception: If database save fails (logged but not raised)
         """
-        if not db_config.enabled:
-            logger.debug("Database not enabled, skipping database save")
-            return 0
-
         with ErrorContext("saving home win rates to database"):
             try:
                 db_ops = DatabaseOperations()
@@ -741,23 +718,24 @@ class HomeWinRateCalculator:
 
     def compute_and_save(
         self, historical_df: pd.DataFrame, date_str: Optional[str] = None
-    ) -> Tuple[pd.DataFrame, pd.DataFrame, str]:
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, Optional[str]]:
         """
-        Complete workflow: calculate win rates, filter, and save.
+        Complete workflow: calculate win rates, filter, and save to database.
 
         This is the main method that orchestrates the entire home win rate
-        calculation workflow.
+        calculation workflow. CSV saving has been removed in favor of database operations.
 
         Args:
             historical_df: DataFrame with historical predictions and results
-            date_str: Optional date string for filename
+            date_str: Optional date string (deprecated, kept for compatibility)
 
         Returns:
-            Tuple of (all_win_rates, filtered_good_teams, output_path)
+            Tuple of (all_win_rates, filtered_good_teams, None)
+            Note: third element is None (previously output_path)
 
         Example:
             >>> calculator = HomeWinRateCalculator(min_win_rate=0.55)
-            >>> all_rates, good_teams, path = calculator.compute_and_save(hist_df)
+            >>> all_rates, good_teams, _ = calculator.compute_and_save(hist_df)
             >>> print(f"Found {len(good_teams)} good home teams")
         """
         with ErrorContext("computing and saving home win rates workflow"):
@@ -767,19 +745,16 @@ class HomeWinRateCalculator:
             # Step 2: Filter good teams
             good_teams_df = self.filter_good_home_teams(win_rates_df)
 
-            # Step 3: Save to CSV
-            output_path = self.save_home_win_rates(win_rates_df, date_str)
-
-            # Step 4: Save to database if enabled
-            if db_config.enabled:
-                self.save_to_database(win_rates_df)
+            # Step 3: Save to database
+            self.save_to_database(win_rates_df)
+            logger.info("Home win rates saved to database")
 
             logger.info(
                 f"Home win rate calculation complete. "
                 f"{len(good_teams_df)}/{len(win_rates_df)} teams above threshold"
             )
 
-            return win_rates_df, good_teams_df, output_path
+            return win_rates_df, good_teams_df, None
 
 
 # ============================================================================

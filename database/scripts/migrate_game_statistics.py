@@ -80,7 +80,7 @@ def prepare_dataframe_for_db(df: pd.DataFrame) -> pd.DataFrame:
 
     # Convert date column to proper datetime
     if 'date' in df_clean.columns:
-        df_clean['date'] = pd.to_datetime(df_clean['date']).dt.date
+        df_clean['date'] = pd.to_datetime(df_clean['date'], format='mixed').dt.date
 
     # Convert boolean columns
     if 'won' in df_clean.columns:
@@ -186,12 +186,6 @@ def main():
         help="Migrate only the most recent CSV file"
     )
     args = parser.parse_args()
-
-    # Check if database is enabled
-    if not db_config.enabled:
-        logger.error("Database is not enabled. Set USE_DATABASE=true in .env")
-        logger.error("See docs/DATABASE_SETUP.md for configuration instructions")
-        return 1
 
     # Get directory paths
     paths = get_directory_paths()

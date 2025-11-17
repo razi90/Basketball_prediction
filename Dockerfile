@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     curl \
     netcat-openbsd \
+    postgresql-client \
     ca-certificates \
     fonts-liberation \
     libasound2 \
@@ -126,10 +127,10 @@ RUN pip install -e .
 RUN mkdir -p 2026/data 2026/output logs
 
 # Copy entrypoint script
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 WORKDIR /app
 
-ENTRYPOINT ["docker-entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["nba-predict", "pipeline"]
