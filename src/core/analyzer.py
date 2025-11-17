@@ -250,8 +250,9 @@ class BettingPerformanceAnalyzer:
                 return games_df
 
             # Filter to current season only
+            # Note: season column in database is VARCHAR, so convert to string for comparison
             if "season" in games_df.columns:
-                games_df = games_df[games_df["season"] == season].copy()
+                games_df = games_df[games_df["season"] == str(season)].copy()
 
             # Validate required columns
             required_cols = ["date", "team", "won"]
