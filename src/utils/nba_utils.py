@@ -60,7 +60,7 @@ def get_directory_paths() -> Dict[str, str]:
 
     Returns:
         dict with BASE_DIR, DATA_DIR, STAT_DIR, STANDINGS_DIR, SCORES_DIR,
-        NEXT_GAME_DIR, PREDICTION_DIR
+        NEXT_GAME_DIR, PREDICTION_DIR, PRED_DIR, ENRICHED_DIR
     """
     # In Actions, cwd will be the repo root after checkout
     base_dir = os.getcwd()
@@ -74,6 +74,8 @@ def get_directory_paths() -> Dict[str, str]:
         "SCORES_DIR": os.path.join(data_dir, "data", f"{CURRENT_SEASON}_scores"),
         "NEXT_GAME_DIR": os.path.join(data_dir, "Next_Game"),
         "PREDICTION_DIR": os.path.join(base_dir, "output", "LightGBM"),
+        "PRED_DIR": os.path.join(base_dir, "output", "LightGBM", "predictions"),
+        "ENRICHED_DIR": os.path.join(base_dir, "output", "LightGBM", "enriched"),
     }
 
     for p in paths.values():
