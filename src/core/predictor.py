@@ -315,8 +315,21 @@ class GameDataPreprocessor:
             >>> print(preprocessor.scaled_columns[:5])
             ['fg_pct', 'fg3_pct', 'ft_pct', 'orb', 'drb']
         """
+        # Metadata columns to exclude from scaling
         removed_cols_for_scaling = ["season", "date", "won", "target", "team", "team_opp"]
-        to_scale = df.columns[~df.columns.isin(removed_cols_for_scaling)]
+
+        # Get only numeric columns
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+
+        # Filter out metadata columns and any ID-like columns (containing 'id' in the name)
+        to_scale = [col for col in numeric_cols
+                   if col not in removed_cols_for_scaling
+                   and 'id' not in col.lower()]
+
+        if not to_scale:
+            logger.warning("No numeric columns found to scale")
+            self.scaled_columns = []
+            return df
 
         self.scaler = MinMaxScaler()
         df[to_scale] = self.scaler.fit_transform(df[to_scale])
