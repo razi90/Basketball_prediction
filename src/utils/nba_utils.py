@@ -60,7 +60,7 @@ def get_directory_paths() -> Dict[str, str]:
 
     Returns:
         dict with BASE_DIR, DATA_DIR, STAT_DIR, STANDINGS_DIR, SCORES_DIR,
-        NEXT_GAME_DIR, PREDICTION_DIR
+        NEXT_GAME_DIR, PREDICTION_DIR, PRED_DIR, ENRICHED_DIR
     """
     # In Actions, cwd will be the repo root after checkout
     base_dir = os.getcwd()
