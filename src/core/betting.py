@@ -425,16 +425,22 @@ class OddsManager:
             # Merge
             df = preds.merge(odds, on=["home_team", "away_team"], how="left")
 
+            # Rename odds columns to match database schema (odds 1 -> odds_1, odds 2 -> odds_2)
+            if "odds 1" in df.columns:
+                df.rename(columns={"odds 1": "odds_1"}, inplace=True)
+            if "odds 2" in df.columns:
+                df.rename(columns={"odds 2": "odds_2"}, inplace=True)
+
             # Ensure odds are numeric
-            for col in ["odds 1", "odds 2"]:
+            for col in ["odds_1", "odds_2"]:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
 
             # Calculate implied probabilities
-            df["imp_prob_home"] = df["odds 1"].apply(
+            df["imp_prob_home"] = df["odds_1"].apply(
                 lambda x: self.implied_probability(x, "american")
             )
-            df["imp_prob_away"] = df["odds 2"].apply(
+            df["imp_prob_away"] = df["odds_2"].apply(
                 lambda x: self.implied_probability(x, "american")
             )
 
