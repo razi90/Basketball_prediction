@@ -2,9 +2,10 @@ name: "🏀 Complete Daily NBA Prediction Pipeline"
 
 on:
   workflow_dispatch:      # Manual trigger
-  schedule:
-    # Run every day at 06:00 UTC (before games typically start)
-    - cron: "0 6 * * *"
+  # DISABLED: Daily automatic execution
+  # schedule:
+  #   # Run every day at 06:00 UTC (before games typically start)
+  #   - cron: "0 6 * * *"
 
 jobs:
   run_pipeline:
